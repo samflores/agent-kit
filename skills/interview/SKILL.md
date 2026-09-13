@@ -1,6 +1,6 @@
 ---
 name: interview
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: Interview the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking before committing to it.
 ---
 
 Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
@@ -26,3 +26,5 @@ Each round the user answers reshapes the tree: settled decisions unblock the que
 Finding _facts_ is your job, never the user's. When a question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running lookup is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the ready queue now. The _decisions_ are the user's: put each to them and wait.
 
 The session is done when the ready queue is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.
+
+Output follows /clear-tone.

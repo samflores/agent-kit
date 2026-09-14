@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"How does the loader handle an empty table?"}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"It returns an empty row set and skips rendering; no fence is involved in this answer."}]}}

@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"Example fence, typed by the user:\n\n```commit-message\nUser typed subject\n\nUser typed body.\n```"}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"Understood, but I have not presented a fence yet."}]}}

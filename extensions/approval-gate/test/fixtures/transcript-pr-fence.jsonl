@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"Please open the pull request."}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"Here is the proposed pull request text:\n\n```pr-message\nAdd the calibration table\n\nThe loader reads calibration rows from the fixtures directory and\nhandles the empty-table case, so the table renders without a manual\nseed row.\n```"}]}}

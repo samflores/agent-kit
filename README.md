@@ -12,9 +12,12 @@ commit.
 ## Layout
 
 - `skills/`: one directory per skill, named after its slash command
+- `extensions/approval-gate/`: the approval-gate engine plus the Claude
+  Code hook entry point; its README carries the registration snippet
 - `extensions/pi/`: the pi approval-gate extension; its README records the
   install decision
-- `extensions/claude/`: the Claude Code hook adapter; same
+- `extensions/claude/`: the Claude Code install decision for the hook
+  adapter; same
 - `docs/research/`: research notes with every claim pinned to a verified
   source
 - `scripts/install.sh`: the idempotent skill installer

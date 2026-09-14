@@ -1,0 +1,2 @@
+{"type":"user","uuid":"u1","message":{"role":"user","content":"Please commit the calibration work."}}
+{"type":"assistant","uuid":"a1","message":{"role":"assistant","content":[{"type":"text","text":"The work is staged. Here is the proposed commit message:\n\n```commit-message\nAdd the widget calibration table\n\nCalibration rows now load from the fixtures directory and the loader\nhandles the empty-table case.\n```"}]}}

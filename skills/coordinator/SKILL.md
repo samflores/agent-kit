@@ -174,22 +174,9 @@ gitignored by design: the tracker itself (the agents read their ticket from
 their own worktree) and the approval gate's `.claude/settings.json`. Both
 are absent unless copied.
 
-Where worktrunk (`wt`) is installed, its own machinery does this and the
-coordinator configures it once per repo rather than copying by hand:
-
-- `.worktreeinclude` lists the gitignored paths to carry over (the tracker
-  directory, the gate settings).
-- `.config/wt.toml` runs the copy on creation:
-  `pre-start = "wt step copy-ignored --require-include"`. `--require-include`
-  confines the copy to that allowlist instead of every ignored path.
-- Worktree creation then goes through `wt switch --create <slug>`, which
-  fires the hook. Plain `git worktree add` skips it.
-
-Check for a user-level copy hook before adding anything: an existing one
-that copies untracked files will not carry ignored ones
-(`git ls-files --others --exclude-standard` excludes them), which is
-exactly the gap `.worktreeinclude` fills. Without `wt`, copy the paths into
-the worktree as an explicit spawn step.
+The `/worktree-setup` skill configures this once per repo. Run it before
+the first wave; a wave spawned into worktrees missing those files fails
+inside the tab, where the cause is hard to see.
 
 ## Sentinels
 

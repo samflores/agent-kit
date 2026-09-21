@@ -143,8 +143,8 @@ exported in both panes first.
 
 Then:
 
-1. Deliver Appendix A (the implementer template, filled in) to `impl-<slug>`
-   and Appendix B (the reviewer template, filled in) to `rev-<slug>`, one
+1. Deliver `templates/implementer.md` (filled in) to `impl-<slug>` and
+   `templates/reviewer.md` (filled in) to `rev-<slug>`, one
    prompt each: `herdr agent prompt <target> "<template text>"`, the whole
    template as one shell-quoted argument.
 2. Record the ticket's entry in the wave state: slug, branch, worktree
@@ -218,67 +218,15 @@ and its surrounding context, read the agent:
 ## The relay loop
 
 Never block the coordinator chat with a foreground polling loop. The wake
-mechanism belongs to the coordinator's own runtime; arm exactly one.
+mechanism belongs to the coordinator's own runtime, and a wave arms exactly
+one: a Pi coordinator uses the herdr-wave-watcher extension and a status
+daemon, a Claude Code coordinator uses a persistent `Monitor`. The two are
+interchangeable and never both armed.
 
-**A Pi coordinator** uses the two mechanisms below, both already present.
-
-**A Claude Code coordinator** cannot use either: the watcher wakes a
-session through `pi.sendMessage`, and `PI_SESSION_ID` (which names its
-marker) is unset outside Pi. The equivalent is the `Monitor` tool, whose
-every stdout line becomes a chat notification: the same push-wake as
-`triggerTurn`, under a different name. Arm one persistent Monitor per wave
-running the watcher's own logic in shell, which is the watcher's `pass()`
-transcribed:
-
-- Poll `herdr agent list` every ~10s, filtered to the wave's agent names.
-- For each implementer that is idle or done, `herdr agent read <name>
-  --source recent-unwrapped --lines 60` and match the implementer sentinel
-  pattern; for each reviewer, stat its report file under
-  `/tmp/agent-kit-reviews/feat/`.
-- Dedupe against a state file keyed by agent name plus the agent's
-  `state_change_seq` (or the report's mtime), so one event wakes once.
-- Print one line per new event. Print nothing otherwise: every line is a
-  notification.
-
-Emit failure signals too, not just the happy path. A monitor matching only
-sentinels stays silent through a crashed agent, and silence reads exactly
-like work in progress.
-
-The status-only daemon and its footer extension have no Claude Code
-equivalent and are simply dropped; the wave state file carries what the
-footer would have rendered.
-
-The Pi mechanisms, in full:
-
-1. **The herdr-wave-watcher extension** (global
-   ~/.config/pi/agent/extensions/herdr-wave-watcher.ts) wakes the
-   coordinator session on events via pi.sendMessage with triggerTurn.
-   It arms via a marker named after the coordinator's own pi session,
-   whose content is the wave's agent names, one per line:
-   printf 'impl-<slug>\nrev-<slug>\n' >
-   /tmp/agent-kit-wave.active.s$PI_SESSION_ID at spawn, remove that
-   file at teardown. The watcher watches only the names in its own
-   marker, so coordinators never pick up each other's waves even when
-   they share a workspace or lose their herdr environment. Before
-   building any monitoring, inventory the owner's global extensions;
-   the right tool is usually already installed.
-2. **A status-only daemon** (setsid, never a foreground sleep in a tool
-   call: the tool kills its process group on exit, and pkill -f inside
-   such a call can match the wrapper's own command line) rewrites
-   /tmp/wave-telemetry/status.$HERDR_WORKSPACE_ID every ~10s with the
-   wave's agent states and sentinels. The footer extension wave-status.ts
-   (project-local .pi/extensions/, or the global copy in
-   ~/.config/pi/agent/extensions/, activated with /reload) reads that
-   file and renders it via ctx.ui.setStatus, mirroring how the subagent
-   example streams onUpdate into its collapsed widget. Start the daemon
-   at spawn, kill it at teardown (by pid recorded in the wave state,
-   never pkill -f).
-
-Sentinel classification reads the settled turn via agent read with
-status-bar and separator lines filtered; the pane's literal last line
-is always the status bar, so pane wait-output --lines 1 never sees the
-sentinel. The coordinator acts (fires reviews, surfaces fences, relays)
-when its wake mechanism fires or the user writes.
+Read [references/wake-mechanisms.md](references/wake-mechanisms.md) for the
+mechanism this coordinator's runtime needs, including how each one arms at
+spawn and disarms at teardown, and how sentinels are read off a settled
+turn.
 
 Poll every 30 seconds (`sleep 30` between iterations):
 
@@ -515,136 +463,15 @@ When the user chooses to stack the next wave on unmerged PRs:
   local-only: gitignored, never pushed. Worktrees are gitignored and never
   referenced from the tracker.
 
-## Appendix A: implementer prompt template
+## Prompt templates
 
-Deliver filled in: replace `<NN>`, `<ticket title>`, `<ticket path>`,
-`<effort>`, and `<worktree path>`. Deliver as one herdr agent prompt.
+Each agent is prompted at spawn with a filled-in template, delivered as one
+shell-quoted argument to `herdr agent prompt <target>`. Read the template
+when spawning and fill in the ticket path, slug, branch, and base ref:
 
-```text
-You are the implementer for ticket <NN> (<ticket title>). Your working
-directory is the worktree <worktree path>, on branch feat/<slug>; do all
-work there.
+- [templates/implementer.md](templates/implementer.md) for `impl-<slug>`.
+- [templates/reviewer.md](templates/reviewer.md) for `rev-<slug>`.
 
-Read first:
-1. <ticket path>: your ticket. Follow it to the letter; never improvise
-   scope.
-2. The effort map (.scratch/<effort>/map.md): its Destination and Notes
-   sections.
-3. Every ticket your ticket lists under Blocked by, and any ticket it names
-   as its spec or design authority.
-
-Work:
-- Invoke the /implement skill with this ticket and follow it in full,
-  including its commit-at-logical-points cadence: the branch lands as a
-  sequence of clean commits, each one a self-contained logical layer,
-  never one undifferentiated blob. Each commit goes through the fence
-  protocol below: as each layer completes, present that commit's message
-  via the /commit skill, let it land on its approval, then proceed to the
-  next layer. When the ticket's Commits section names the layers, follow
-  it; when it does not, layer at the work's own logical points. A ticket
-  never needs to name its commits: layered landing is the default.
-
-Commits and the fence protocol:
-- Present the complete commit message (subject plus body) of the next
-  pending commit in a fenced code block tagged commit-message. One message
-  at a time; a new fence supersedes any earlier one.
-- After presenting a fence, END that turn with the final line
-  AWAITING APPROVAL. A reviewer fires at that line, before any approval:
-  review findings arrive as later messages. Fold the fixes into the
-  pending work, then re-present the fence (superseding the earlier one)
-  and end with AWAITING APPROVAL again.
-- Run git commit only after a later message in this session contains the
-  word approved (case-insensitive, whole word), and only after the
-  reviewer's PASS, using exactly the fenced text. The approval may come
-  from the user directly or relayed by the coordinator; both arm the gate
-  identically. If nobody replies, stay waiting; never commit silently.
-  One approval, one commit; repeat per commit until the ticket's work is
-  done.
-- Never amend or rewrite history.
-- Never push and never open a PR. PR mechanics belong to the coordinator,
-  which runs the /pr flow itself; the pr-message fence protocol never
-  applies to you.
-
-One message at a time:
-- Answer the current message fully in one turn, then end the turn with
-  your sentinel line and stop. Send nothing after the sentinel line.
-  Wait for the next message.
-
-Stop and ask:
-- Whenever anything is ambiguous, missing, or failing, stop and ask. Do
-  not guess.
-
-Sentinel rules (the coordinator polls them; they are machine-greppable):
-- End EVERY turn with exactly one final line:
-  AWAITING APPROVAL (a fence is presented; the reviewer fires at this
-  line, before the approval word), or
-  BLOCKED: <one-line question> (stopped: ambiguity, failure, missing
-  input), or
-  IMPLEMENTATION COMPLETE (the final commit has landed; the
-  ticket work is finished).
-- Exactly one line, nothing after it.
-
-Once the final commit lands, end the turn with IMPLEMENTATION COMPLETE. The
-coordinator takes the branch from there and runs the PR step itself.
-```
-
-## Appendix B: reviewer prompt template
-
-Deliver filled in: replace `<NN>`, `<ticket title>`, `<ticket path>`,
-`<effort>`, and `<worktree path>`. Deliver as one herdr agent prompt.
-
-```text
-You are the reviewer for ticket <NN> (<ticket title>). Your working
-directory is the worktree <worktree path>, on branch feat/<slug>. The
-implementer (impl-<slug>) works in the other pane of this tab; you never
-take over its work.
-
-Standby:
-- You receive this message before the implementation exists. Acknowledge
-  it by ending this turn with the final line STANDING BY, then wait.
-  Review requests fire at the implementer's AWAITING APPROVAL, before any
-  approval is given: you review pending work, not landed commits.
-
-On each review request (it carries the ticket path, the branch, the base
-ref, and what is pending: the branch's next commit, or the PR message
-with its fence text included verbatim):
-1. Read the ticket and the effort map's Destination and Notes sections.
-2. Review the pending change against the base ref. A pending commit is
-   uncommitted work (no approval has been given yet):
-   git diff <base-ref>
-   A pending PR message is the fence text carried in the request itself:
-   review it against the landed branch and the ticket. Check ticket
-   compliance (every requirement), failing or missing checks (run the
-   repo's own test, lint, and format commands as its conventions define),
-   missing coverage of the ticket's acceptance criteria, duplication, and
-   obvious defects.
-3. Change nothing. You review: never edit files, commit, push, or open
-   PRs. The commit-message and pr-message fence protocol never applies
-   to you.
-4. Write a structured report to /tmp/agent-kit-reviews/feat/<slug>.md
-   (create the directory first: mkdir -p /tmp/agent-kit-reviews/feat):
-   - Verdict: PASS or FINDINGS
-   - Numbered findings: each with its location (file and line), its
-     evidence (command output or quoted code), and what it contradicts
-     (ticket requirement, check, or repo convention)
-   - Checks run: each command and its result
-5. End the chat turn with exactly one final line: VERDICT: PASS or
-   VERDICT: FINDINGS. The report file is authoritative; the chat line is
-   for humans.
-
-One message at a time:
-- Answer the current message fully in one turn, then end the turn with
-  your final line and stop. Send nothing after it. Wait for the next
-  message.
-
-Stop and ask:
-- Whenever you cannot review (missing input, ambiguous ticket, broken
-  environment), stop and ask. Do not guess.
-
-Sentinel rules (the coordinator polls them; they are machine-greppable):
-- End EVERY turn with exactly one final line: STANDING BY, VERDICT: PASS,
-  VERDICT: FINDINGS, or BLOCKED: <one-line question>.
-- Exactly one line, nothing after it.
-```
-
-Output follows /clear-tone.
+The templates are delivered verbatim apart from those substitutions. They
+carry the sentinel contract the relay loop greps for, so editing one without
+updating the sentinel rules above breaks the loop.

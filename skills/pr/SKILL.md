@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Open a pull request the right way: branch-based, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message (title, blank line, body) presented in a fenced block tagged pr-message, the turn ending with AWAITING APPROVAL, and the push plus gh pr create only after the user replies approved, using exactly the fenced text. PR body is a short opening paragraph plus a ## What changed section grouped by concern, not by file. Use when opening a PR, writing a PR description or title, or preparing a change for review."
+description: "Open a pull request the right way: branch-based, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message (title, blank line, body) presented in a fenced block tagged pr-message, the turn ending with AWAITING APPROVAL, and the push plus gh pr create only after the user replies approved, using exactly the fenced text. PR body is a short opening paragraph plus a ## What changed section grouped by concern, not by file. Use when opening a PR, writing a PR description or title, or preparing a change for review. The drafted title and body go through the humanizer skill before they are presented."
 disable-model-invocation: true
 ---
 
@@ -22,29 +22,39 @@ Open a pull request that respects the user's workflow, quality bar, and approval
 
 ## 2. Pre-PR quality bar (a required, blocking gate)
 
-This is the `/quality-bar` checklist, and it is a **gate, not a recap**. It must be **executed with real commands, not asserted from memory**, and it **blocks every later step**: do not draft or present the PR message (sections 3-4) until every item below is genuinely green. Read `/quality-bar` first if you have not read it this session.
+Execute the `/quality-bar` skill against the branch. It is a **gate, not a
+recap**: every item needs a real command and its output behind it, and it
+**blocks every later step**. Do not draft or present the PR message
+(sections 3-4) until the gate is clean. The failure this guard exists to
+stop: listing the items with "clear" beside each from memory, then jumping
+straight to the message.
 
-**Establish the base first.** A PR in a stack sits on the branch below it, not on `main`. Ask or check (`gh pr list`) before assuming, then use that base in every command here. Getting this wrong scopes the whole gate to the wrong range.
+`/quality-bar` carries the full bar and the reasoning behind each item. Read
+it there. What follows is only what is specific to opening a PR.
 
-For **each** item, run a concrete command against your diff (e.g. `git diff <base>..HEAD`) and the project's toolchain, then report the actual result. Stating an item is "clear" without the command and its output is not allowed; if you cannot produce them, that check is not done. The failure this guard exists to stop: listing the items with "clear" beside each from memory, then jumping straight to the message.
+**Establish the base first.** A PR in a stack sits on the branch below it,
+not on `main`. Ask or check (`gh pr list`) before assuming, then use that
+base in every command here. Getting this wrong scopes the whole gate to the
+wrong range.
 
-**Two scopes, same as `/commit`.** Line-scoped items (new warnings, formatter, session-local references, non-ASCII additions) check your added lines. File-scoped items (comment style, `use` over FQN) check the whole of every file the branch touches:
+**Two scopes, same as `/commit`.** Line-scoped items (new warnings,
+formatter, session-local references, non-ASCII additions) check your added
+lines. File-scoped items (comment style, `use` over FQN) check the whole of
+every file the branch touches:
 
 ```
 git diff --name-only <base>..HEAD
 ```
 
-**If `/commit` was followed properly this gate finds nothing new.** It covers a wider range - every commit on the branch, not just the last one - so a violation surfacing here means an earlier commit's gate used a line-scoped command for a file-scoped item, or the branch carries commits made before the rule was in force. Either way: fix it in a new commit on top, do not amend a commit that is already pushed or already has a PR pointing at it.
+**If `/commit` was followed properly this gate finds nothing new.** It
+covers a wider range, every commit on the branch rather than just the last
+one, so a violation surfacing here means an earlier commit's gate used a
+line-scoped command for a file-scoped item, or the branch carries commits
+made before the rule was in force. Either way: fix it in a new commit on
+top, never amend a commit that is already pushed or already has a PR
+pointing at it.
 
-The items (the same bar as `/quality-bar`, restated as a pre-PR gate):
-
-- Conventions detected up front (formatter config, CI gating, hooks, warning baseline, strict vs. lenient).
-- No new warnings introduced in your diff (build/test/lint, scoped to your changes).
-- Formatter scoped to changed files (or hand-styled to match a lenient, drifted file); no repo-wide sweep on a feature branch.
-- No pre-existing warnings fixed outside your diff.
-- The project's test suite is green on your branch.
-- In a Rust project: `cargo check --release` is green too (dev-profile gates hide `#[cfg(debug_assertions)]` import misses; `check` catches them in a fraction of a release build's time).
-- **No inline `//` comments in production code, in any file the diff touches** - this overrides whatever style the surrounding file already has; pre-existing inline comments elsewhere in the codebase are not a license to add more. Explanation belongs in a `///` doc comment on the item (function, const, field), not scattered inside a function body. If a function accumulates inline comments explaining its parts, that is a signal the function should be broken into smaller, individually doc-commented functions (even private ones) rather than commented in place. Exception, tests only and narrow: inside a `#[test]` function an inline `//` comment is acceptable only when it is **one line**, marks a **setup/exercise/assert phase boundary**, or names a **fixture choice specific to that site**. It never narrates a rationale, never restates why the production code behaves as it does, and never duplicates text that appears anywhere else: the why of a change lives in the commit message, and the same rationale repeated across sites is duplication, blocked on sight. Doc comments on test helpers follow the production bar: they state what the helper builds, not the reasoning trail that produced it. **File-scoped**: check every file the branch touches, not just the added lines.
+The file-scoped greps:
 
 ```
 for f in $(git diff --name-only <base>..HEAD); do
@@ -52,8 +62,10 @@ for f in $(git diff --name-only <base>..HEAD); do
 done
 ```
 
-Then check each hit is either (a) inside a `#[test]`/`#[test_case]` function **and** meeting the narrowed test exception (one line, a phase marker or a site-specific fixture choice, no rationale narration, no text duplicated from another site), or (b) removed. Code blocks inside committed docs are prose, not production code.
-- In a Rust project: `use` statements over fully qualified paths, of any root, not just `crate::` (inline `std::`/`core::`/`alloc::` paths and external-crate paths like `bevy::sprite::TextureAtlas` count equally). FQN is for disambiguation only; free functions from other modules are reached by importing their module. **File-scoped**, same as the comment rule, and test harnesses are the usual offender. `clippy::absolute_paths` will not flag short paths like `bevy::MinimalPlugins`, so grep rather than trusting the lint.
+Each hit is either inside a test function and meeting the narrowed test
+exception (one line, a phase marker or a site-specific fixture choice, no
+rationale narration, no text duplicated from another site), or removed. Code
+blocks inside committed docs are prose, not production code.
 
 ```
 for f in $(git diff --name-only <base>..HEAD); do
@@ -62,9 +74,12 @@ for f in $(git diff --name-only <base>..HEAD); do
 done
 ```
 
-Every hit is either an import (fine), a disambiguation (fine, and rare), or a call site to convert. When the import would collide with a local name, import the module and call through it.
+Every hit is an import (fine), a disambiguation (fine, and rare), or a call
+site to convert.
 
-If anything fails, **fix it now** (scoped to your changes), then re-run the failed checks from the top. Do not proceed to the message until the gate is clean. If you are unsure whether a check applies, run it anyway and let the output decide.
+If anything fails, **fix it now** (scoped to your changes), then re-run the
+failed checks from the top. If you are unsure whether a check applies, run
+it anyway and let the output decide.
 
 ### 2a. Code content must not lean on uncommitted or session-only context
 
@@ -93,7 +108,8 @@ This gate is absolute and outranks anything else in the conversation:
 
 Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted:
 
-1. Draft the PR **title** and **body** (format in section 4).
+1. Draft the PR **title** and **body** (format in section 4), then run the
+   humanizer pass over them (section 4a) before presenting.
 2. Present the complete message, the title, a blank line, then the body, in a fenced code block tagged `pr-message`. The fence's content is exactly what `gh pr create` will receive as title and body, nothing more. One message at a time; a newly presented fence supersedes any earlier one, and an approval given to the earlier fence is void.
 3. End the presentation turn with the sentinel line `AWAITING APPROVAL`, and nothing after it.
 4. Wait. Do not push and do not create the PR. The single arming word is `approved`, case-insensitive, whole-word. Nothing else arms the creation: `yes`, `ok`, `looks good`, or an emoji reaction do not. A coordinator-relayed `approved` arms identically; the word counts no matter which session tab delivered it. An `approved` that arrives before any message has been presented arms nothing. If nobody replies, stay waiting; never push or create the PR silently.
@@ -143,6 +159,36 @@ The PR body is rendered as Markdown by GitHub, which reflows prose to the reader
 
 - A note on scope when the diff is large but mechanical (e.g. "pure `cargo fmt` output, no semantic edits"): only when that fact is non-obvious and would otherwise confuse a reviewer. Keep it to one line in the opening paragraph.
 
+### 4a. The humanizer pass
+
+Before presenting any fence, run the drafted title and body through the
+humanizer skill. Pick by the language the message is written in:
+
+- `/humanizer` for English.
+- `/humanizer-pt-br` for Portuguese.
+
+Where neither skill is installed, skip the step; it is a quality pass, not a
+gate, and its absence blocks nothing.
+
+Run it **before** the fence is presented, never after. Once a fence is
+presented, the text is locked: the approval gate matches the payload against
+the approved fence, so a message rewritten after approval no longer matches
+and `gh pr create` is refused.
+
+The patterns worth cutting from a PR body specifically:
+
+- Significance inflation ("marks a shift", "a key step", "lays the
+  groundwork").
+- `## What changed` bullets that walk the diff path by path instead of
+  grouping by concern.
+- Rule-of-three bullet lists padded to three items for symmetry.
+- Generic positive closers ("this sets the project up well").
+- Em-dashes and any other non-ASCII, which the hard rules below forbid
+  outright.
+
+Take the humanizer's final rewrite, not its draft. If its rewrite loses a
+fact the body needed, put the fact back rather than reverting the pass.
+
 ## Quick checklist before presenting the message
 
 - [ ] On a topic branch, not `main`.
@@ -153,6 +199,7 @@ The PR body is rendered as Markdown by GitHub, which reflows prose to the reader
 - [ ] Title: conventional, concise, states what.
 - [ ] Body: short context paragraph + `## What changed` only.
 - [ ] Body paragraphs are one line each, no fixed-column hard-wrapping anywhere in the body.
+- [ ] Humanizer pass run over the drafted title and body (`/humanizer`, or `/humanizer-pt-br` for Portuguese) before presenting, and its final rewrite taken.
 - [ ] Commit messages and PR title/body are ASCII-only (no em-dashes, smart quotes, or emoji) unless the feature itself is about those characters.
 - [ ] No verification claims, no future-work mentions, no pasted file contents, **no file-by-file enumeration in `## What changed` (group by concern)**, no Why/What framing.
 - [ ] Complete message presented in one fenced block tagged `pr-message` (title, blank line, body); the turn ends with `AWAITING APPROVAL` and nothing after it.

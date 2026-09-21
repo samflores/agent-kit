@@ -1,6 +1,6 @@
 ---
 name: commit
-description: "Create a local commit the right way: never on main, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message presented in a fenced block tagged commit-message, the turn ending with AWAITING APPROVAL, and git commit run only after the user replies approved, using exactly the fenced text. The commit body is an opening paragraph for non-trivial changes and is omitted for trivial chores; the ## What changed section belongs to PR bodies, not commits. Use when the user asks to commit, make a commit, or save changes with git. Does not push or open a PR; /pr handles that."
+description: "Create a local commit the right way: never on main, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message presented in a fenced block tagged commit-message, the turn ending with AWAITING APPROVAL, and git commit run only after the user replies approved, using exactly the fenced text. The drafted message goes through the humanizer skill before it is presented. The commit body is an opening paragraph for non-trivial changes and is omitted for trivial chores; the ## What changed section belongs to PR bodies, not commits. Use when the user asks to commit, make a commit, or save changes with git. Does not push or open a PR; /pr handles that."
 disable-model-invocation: true
 ---
 
@@ -21,14 +21,27 @@ Create a commit that respects the user's workflow, quality bar, and approval pro
 
 ## 2. Pre-commit quality bar (a required, blocking gate)
 
-This is the `/quality-bar` checklist, and it is a **gate, not a recap**. It must be **executed with real commands, not asserted from memory**, and it **blocks the message step**: do not draft or present the commit message (section 3) until every item below is genuinely green. Read `/quality-bar` first if you have not read it this session.
+Execute the `/quality-bar` skill against your diff. It is a **gate, not a
+recap**: every item needs a real command and its output behind it, and it
+**blocks the message step**. Do not draft or present the commit message
+(section 3) until the gate is clean. Stating an item is "clear" without the
+command is not allowed; if you cannot produce the output, that check is not
+done.
 
-For **each** item, run a concrete command against your diff (e.g. `git diff` / `git diff --staged`) and the project's toolchain, then report the actual result. Stating an item is "clear" without the command and its output is not allowed; if you cannot produce them, that check is not done.
+`/quality-bar` carries the full bar (conventions, warning baseline,
+formatter scoping, tests, comment style, and the language-specific import
+conventions) and the reasoning behind each item. Read it there. What follows
+is only what is specific to committing.
 
-**Two scopes, and using the wrong one is the classic failure.** Some items are about the lines you wrote; others are about the files you touched:
+**Two scopes, and using the wrong one is the classic failure.** Some items
+are about the lines you wrote; others about the files you touched:
 
-- **Line-scoped** (your added lines only): new warnings, formatter output, session-local references, non-ASCII in your own additions.
-- **File-scoped** (the whole of every file your diff touches, whoever wrote it): the comment-style rule and the `use`-over-FQN rule. Both say "in any file the diff touches" and mean it. A file you edit becomes yours to bring up to standard; a pre-existing violation in a file you never opened is not your problem, but one in a file you did open is.
+- **Line-scoped** (your added lines only): new warnings, formatter output,
+  session-local references, non-ASCII in your own additions.
+- **File-scoped** (the whole of every file your diff touches, whoever wrote
+  it): the comment-style rule and the `use`-over-FQN rule. A file you edit
+  becomes yours to bring up to standard; a pre-existing violation in a file
+  you never opened is not your problem.
 
 Get the file list first and check against it, not against the diff hunks:
 
@@ -37,17 +50,11 @@ git diff --name-only            # unstaged
 git diff --name-only --staged   # staged
 ```
 
-Checking a file-scoped item with a line-scoped command is how a gate reports clean and the `/pr` gate later reports the same file dirty. If this skill is followed properly, `/pr` finds nothing new.
+Checking a file-scoped item with a line-scoped command is how a gate reports
+clean and the `/pr` gate later reports the same file dirty. If this skill is
+followed properly, `/pr` finds nothing new.
 
-The items (the same bar as `/quality-bar` and `/pr`):
-
-- Conventions detected up front (formatter config, CI gating, hooks, warning baseline, strict vs. lenient).
-- No new warnings introduced in your diff (build/test/lint, scoped to your changes).
-- Formatter scoped to changed files (or hand-styled to match a lenient, drifted file); no repo-wide sweep on a feature branch.
-- No pre-existing warnings fixed outside your diff.
-- The project's test suite is green on your branch.
-- In a Rust project: `cargo check --release` is green too (dev-profile gates hide `#[cfg(debug_assertions)]` import misses; `check` catches them in a fraction of a release build's time).
-- **No inline `//` comments in production code, in any file the diff touches** - this overrides whatever style the surrounding file already has; pre-existing inline comments elsewhere in the codebase are not a license to add more. Explanation belongs in a `///` doc comment on the item (function, const, field), not scattered inside a function body. If a function accumulates inline comments explaining its parts, that is a signal the function should be broken into smaller, individually doc-commented functions (even private ones) rather than commented in place. Exception: inline `//` comments are fine *inside test functions* when they mark out setup/exercise/assert phases or annotate a specific test fixture choice - they do not need to become doc comments. **File-scoped**: check every file the diff touches, not just the added lines.
+The file-scoped greps:
 
 ```
 for f in $(git diff --name-only; git diff --name-only --staged); do
@@ -55,8 +62,8 @@ for f in $(git diff --name-only; git diff --name-only --staged); do
 done
 ```
 
-Then check each hit is either (a) inside a `#[test]`/`#[test_case]` function or (b) removed/promoted to a doc comment.
-- In a Rust project: `use` statements over fully qualified paths, of any root, not just `crate::` (inline `std::`/`core::`/`alloc::` paths and external-crate paths like `bevy::sprite::TextureAtlas` count equally). FQN is for disambiguation only; free functions from other modules are reached by importing their module. **File-scoped**, same as the comment rule: an inline root-qualified path in a file you touched is yours to fix, even on a line you did not write. Test harnesses are the usual offender, and `clippy::absolute_paths` will not flag short paths like `bevy::MinimalPlugins`.
+Each hit is either inside a test function and meeting the narrowed test
+exception, or removed/promoted to a doc comment.
 
 ```
 for f in $(git diff --name-only; git diff --name-only --staged); do
@@ -65,9 +72,11 @@ for f in $(git diff --name-only; git diff --name-only --staged); do
 done
 ```
 
-Every hit is either an import (fine), a disambiguation (fine, and rare), or a call site to convert. When the import would collide with a local name, import the module and call through it rather than reaching for the full path.
+Every hit is an import (fine), a disambiguation (fine, and rare), or a call
+site to convert.
 
-If anything fails, **fix it now** (scoped to your changes), then re-run the failed checks from the top. Do not proceed to the message until the gate is clean.
+If anything fails, **fix it now** (scoped to your changes), then re-run the
+failed checks from the top.
 
 ### 2a. Code content must not lean on uncommitted or session-only context
 
@@ -97,7 +106,8 @@ This gate is absolute and outranks anything else in the conversation:
 Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted:
 
 1. Check `git status` and review what's staged (or about to be staged). If a broad `git add` would sweep in unrelated or suspicious files, stage specific paths instead.
-2. Draft the commit message (format in section 4).
+2. Draft the commit message (format in section 4), then run the humanizer
+   pass over it (section 4a) before presenting.
 3. Present the complete message, the subject line plus the body when there is one, in a fenced code block tagged `commit-message`. The fence's content is exactly what `git commit` will receive, nothing more. One message at a time: if several commits are planned, each gets its own presentation and approval cycle. A newly presented fence supersedes any earlier one, and an approval given to the earlier fence is void.
 4. End the presentation turn with the sentinel line `AWAITING APPROVAL`, and nothing after it.
 5. Wait. Do not commit. The single arming word is `approved`, case-insensitive, whole-word. Nothing else arms a commit: `yes`, `ok`, `looks good`, or an emoji reaction do not. A coordinator-relayed `approved` arms identically; the word counts no matter which session tab delivered it. An `approved` that arrives before any message has been presented arms nothing. If nobody replies, stay waiting; never commit silently.
@@ -139,6 +149,35 @@ When in doubt, include the body. A short body that a reviewer skips is free; a m
 - **No mention of future work or follow-ups** in the commit message.
 - **No file-by-file enumeration** of the diff. Describe the change by concern, not by path.
 
+### 4a. The humanizer pass
+
+Before presenting any fence, run the drafted message through the humanizer
+skill. Pick by the language the message is written in:
+
+- `/humanizer` for English.
+- `/humanizer-pt-br` for Portuguese.
+
+Where neither skill is installed, skip the step; it is a quality pass, not a
+gate, and its absence blocks nothing.
+
+Run it **before** the fence is presented, never after. Once a fence is
+presented, the text is locked: the approval gate matches the payload against
+the approved fence, so a message rewritten after approval no longer matches
+and the commit is refused.
+
+The patterns worth cutting from a commit message specifically:
+
+- Restating in the body what the subject line already says.
+- Narrating the diff file by file instead of describing the change by
+  concern.
+- Inflating the change's significance ("marks a shift", "a key step").
+- Counts and measurements a reader recovers from the diff itself.
+- Em-dashes and any other non-ASCII, which the hard rules below forbid
+  outright.
+
+Take the humanizer's final rewrite, not its draft. If its rewrite loses a
+fact the message needed, put the fact back rather than reverting the pass.
+
 ## Quick checklist before presenting the message
 
 - [ ] On a topic branch, not `main`.
@@ -148,6 +187,7 @@ When in doubt, include the body. A short body that a reviewer skips is free; a m
 - [ ] `git status` reviewed; only intended files staged, nothing suspicious swept in by a broad `git add`.
 - [ ] Subject line: `type(scope): summary`, conventional, concise, lowercase after type, no trailing period, states what not why.
 - [ ] Body: opening paragraph only for non-trivial changes; omitted for trivial changes or simple chores. No `## What changed` section in commit messages.
+- [ ] Humanizer pass run over the drafted message (`/humanizer`, or `/humanizer-pt-br` for Portuguese) before presenting, and its final rewrite taken.
 - [ ] Message is ASCII-only, no AI attribution, no verification claims, no future-work mentions, no file-by-file enumeration, no headings of any kind.
 - [ ] Complete message presented in one fenced block tagged `commit-message`; the turn ends with `AWAITING APPROVAL` and nothing after it.
 - [ ] `git commit` only after a later reply contains the word `approved`, using exactly the fenced text. Never on `main`, never silently.

@@ -1,7 +1,6 @@
 ---
 name: clear-tone
 description: 'Shape output so any reader can act on it: lead with the next action, number multi-step work, restate state across turns, suppress tangents, give specific time estimates, make completed work visible. Invoke with /clear-tone; stays on until "stop clear-tone".'
-disable-model-invocation: true
 license: MIT
 metadata:
   tags: "Output Style, Productivity, Formatting"

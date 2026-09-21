@@ -6,6 +6,8 @@ disable-model-invocation: true
 
 Implement the work described by the user in the spec or tickets. Follow the spec and ticket to the letter; do not improvise scope.
 
+Workflow position: this skill runs inside the **delivery phase** of the build workflow, on one implementation ticket that `/to-tickets` sliced from a settled `/exploration` plan, usually inside a `/coordinator` wave (one herdr tab, one worktree, one branch, one implementer). The authority chain is the ticket, then the effort map, then the exploration decisions behind it. Open questions are never decided here: stop and ask.
+
 Use /tdd where possible, at pre-agreed seams.
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.

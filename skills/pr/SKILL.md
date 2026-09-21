@@ -44,7 +44,7 @@ The items (the same bar as `/quality-bar`, restated as a pre-PR gate):
 - No pre-existing warnings fixed outside your diff.
 - The project's test suite is green on your branch.
 - In a Rust project: `cargo check --release` is green too (dev-profile gates hide `#[cfg(debug_assertions)]` import misses; `check` catches them in a fraction of a release build's time).
-- **No inline `//` comments in production code, in any file the diff touches** - this overrides whatever style the surrounding file already has; pre-existing inline comments elsewhere in the codebase are not a license to add more. Explanation belongs in a `///` doc comment on the item (function, const, field), not scattered inside a function body. If a function accumulates inline comments explaining its parts, that is a signal the function should be broken into smaller, individually doc-commented functions (even private ones) rather than commented in place. Exception: inline `//` comments are fine *inside test functions* when they mark out setup/exercise/assert phases or annotate a specific test fixture choice - they do not need to become doc comments. **File-scoped**: check every file the branch touches, not just the added lines.
+- **No inline `//` comments in production code, in any file the diff touches** - this overrides whatever style the surrounding file already has; pre-existing inline comments elsewhere in the codebase are not a license to add more. Explanation belongs in a `///` doc comment on the item (function, const, field), not scattered inside a function body. If a function accumulates inline comments explaining its parts, that is a signal the function should be broken into smaller, individually doc-commented functions (even private ones) rather than commented in place. Exception, tests only and narrow: inside a `#[test]` function an inline `//` comment is acceptable only when it is **one line**, marks a **setup/exercise/assert phase boundary**, or names a **fixture choice specific to that site**. It never narrates a rationale, never restates why the production code behaves as it does, and never duplicates text that appears anywhere else: the why of a change lives in the commit message, and the same rationale repeated across sites is duplication, blocked on sight. Doc comments on test helpers follow the production bar: they state what the helper builds, not the reasoning trail that produced it. **File-scoped**: check every file the branch touches, not just the added lines.
 
 ```
 for f in $(git diff --name-only <base>..HEAD); do
@@ -52,7 +52,7 @@ for f in $(git diff --name-only <base>..HEAD); do
 done
 ```
 
-Then check each hit is either (a) inside a `#[test]`/`#[test_case]` function or (b) removed/promoted to a doc comment. Code blocks inside committed docs are prose, not production code.
+Then check each hit is either (a) inside a `#[test]`/`#[test_case]` function **and** meeting the narrowed test exception (one line, a phase marker or a site-specific fixture choice, no rationale narration, no text duplicated from another site), or (b) removed. Code blocks inside committed docs are prose, not production code.
 - In a Rust project: `use` statements over fully qualified paths, of any root, not just `crate::` (inline `std::`/`core::`/`alloc::` paths and external-crate paths like `bevy::sprite::TextureAtlas` count equally). FQN is for disambiguation only; free functions from other modules are reached by importing their module. **File-scoped**, same as the comment rule, and test harnesses are the usual offender. `clippy::absolute_paths` will not flag short paths like `bevy::MinimalPlugins`, so grep rather than trusting the lint.
 
 ```
@@ -122,6 +122,14 @@ Two parts, nothing else:
 
 Do **not** use a `## Why` / `## What` split. The opening paragraph carries the why; `## What changed` carries the what. That is the entire structure.
 
+### Line wrapping: the body is never hard-wrapped
+
+The PR body is rendered as Markdown by GitHub, which reflows prose to the reader's viewport. Fixed-column line breaks (72, 80, or any other width) inside a paragraph are therefore defects: they shatter the paragraph into ragged fragments and break copy-paste and diffing of the body.
+
+- Each paragraph of the body is **one line**: write the full sentence flow with no line breaks inside it, and let the viewer wrap it.
+- A blank line separates paragraphs, exactly as in rendered Markdown.
+- This applies to the PR body only. The title is one line by nature, and this rule says nothing about commit messages, which follow their own skill.
+
 ### Hard rules: things to never include
 
 - **No non-ASCII characters.** Commit messages, the PR title, and the PR body must be plain ASCII. No em-dashes (use a regular hyphen `-`, or split into two sentences), no smart/curly quotes (use straight `'` and `"`), no ellipsis glyph (use three dots `...`), no emoji, no other non-ASCII glyphs. Favor natural ASCII punctuation. The only exception is when the feature itself is *about* those characters (e.g. localizing emoji rendering, or changing how the app handles em-dashes), in which case they're load-bearing, not decorative. Check before presenting.
@@ -140,10 +148,11 @@ Do **not** use a `## Why` / `## What` split. The opening paragraph carries the w
 - [ ] On a topic branch, not `main`.
 - [ ] Base established (the branch below in a stack, not assumed to be `main`) and used in every gate command.
 - [ ] Quality bar **executed with commands, not asserted** (via `/quality-bar`): conventions detected, no new warnings, formatter scoped to changed files (or hand-styled to match if lenient), tests pass. Every item has a real command and its output behind it.
-- [ ] File-scoped items checked against `git diff --name-only <base>..HEAD`, not against the diff hunks: no non-doc `//` and no FQN call sites in any file the branch touches.
+- [ ] File-scoped items checked against `git diff --name-only <base>..HEAD`, not against the diff hunks: no non-doc `//` and no FQN call sites in any file the branch touches. Test inline comments, where they exist, are one-line phase or fixture markers only, with no rationale narration and no repetition across sites.
 - [ ] Code content checked for uncommitted/session-only references (section 2a): no gitignored doc paths, no session shorthand, no future-work framing, no em-dashes/forbidden characters, in the diff's code comments.
 - [ ] Title: conventional, concise, states what.
 - [ ] Body: short context paragraph + `## What changed` only.
+- [ ] Body paragraphs are one line each, no fixed-column hard-wrapping anywhere in the body.
 - [ ] Commit messages and PR title/body are ASCII-only (no em-dashes, smart quotes, or emoji) unless the feature itself is about those characters.
 - [ ] No verification claims, no future-work mentions, no pasted file contents, **no file-by-file enumeration in `## What changed` (group by concern)**, no Why/What framing.
 - [ ] Complete message presented in one fenced block tagged `pr-message` (title, blank line, body); the turn ends with `AWAITING APPROVAL` and nothing after it.

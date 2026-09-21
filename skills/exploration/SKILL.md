@@ -8,6 +8,19 @@ A loose idea has arrived, too big for one agent session, and the details are not
 
 The goal varies per effort, and naming it is the first act of planning: it shapes every ticket. It might be a spec to hand off and iterate on, a decision to lock before implementation starts, or a change made in place like a data-structure migration. The plan is domain-agnostic: engineering work, course content, whatever fits the shape.
 
+## Workflow position
+
+Exploration is the **decision phase** of the build workflow. The phases in order:
+
+1. **`/exploration`** (this skill): turn a loose idea into a settled design by resolving its decision tickets with the owner.
+2. **`/to-tickets`**: slice the settled design into tracer-bullet **implementation tickets** with blocking edges. Never decides anything.
+3. **`/coordinator`**: deliver those tickets as waves: one herdr tab and one git worktree per unblocked ticket, an implementer and a reviewer in split panes.
+4. **`/implement`** and **`/code-review`**: the skills each tab agent applies, one ticket per agent, review before any approval.
+
+Decision tickets and implementation tickets are different artifacts. A decision ticket's resolution is a decision; it lives in this skill's tracker and never becomes a build slice. Implementation tickets are created only by `/to-tickets`, after this plan settles, and they are the only kind a wave builds. When a decision ticket's answer reveals build work, record it for `/to-tickets`; do not slice it here.
+
+This skill ends when every decision is settled and the way to the goal is clear. The hand-off is the settled plan itself: `/to-tickets` reads it as its input.
+
 ## Plan, don't do
 
 Exploration is **planning** by default: each ticket resolves a decision, and the plan is done when the way is clear, with nothing left to decide before someone goes and does the thing. The pull to just do the work is usually the signal you've reached the edge of the plan and it's time to hand off. An effort can override this in its **Notes**, carrying execution into the plan itself, but absent that, produce decisions, not deliverables.
@@ -107,7 +120,7 @@ Ruling something out of scope is a scoping act, not a step on the way. When a ti
 
 ## Invocation
 
-Two modes. Either way, **never resolve more than one ticket per session**, with the exception of research tickets.
+Two modes. Either way, **never resolve more than one ticket per agent-driven session**, with the exception of research tickets: agent context is sized for one decision. An owner-driven sitting is different: while the owner keeps answering, keep resolving their decision tickets in that sitting; the limit paces agents, not conversations.
 
 ### Plan the work
 

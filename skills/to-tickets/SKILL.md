@@ -8,6 +8,17 @@ disable-model-invocation: true
 
 Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices. Each ticket is a **functional deliverable**: it carries its change from foundation to user-facing behavior, and it declares the tickets that **block** it.
 
+## Workflow position
+
+To-tickets is the **slicing phase** of the build workflow. The phases in order:
+
+1. **`/exploration`**: a loose idea becomes a settled design, worked as decision tickets with the owner.
+2. **`/to-tickets`** (this skill): slice that settled design into the implementation tickets this section defines.
+3. **`/coordinator`**: deliver the tickets as waves: one herdr tab and one git worktree per unblocked ticket, an implementer and a reviewer in split panes.
+4. **`/implement`** and **`/code-review`**: the skills each tab agent applies, one ticket per agent, review before any approval.
+
+The usual input is a settled exploration plan: its map plus its resolved decision tickets, which are the authority for every slice. This skill never makes or reopens decisions: an ambiguity or an unsettled question found while slicing goes back to the owner and the exploration effort, never decided here. Decision tickets and the tickets written here are different artifacts: decision tickets resolve decisions inside the exploration tracker; the tickets written here are the only kind a wave builds, and each one is delivered to a fresh agent in its own tab.
+
 The issue tracker and triage label vocabulary should have been provided to you. If not, ask the user where tickets should be published (local files or a real tracker) and which labels apply, before drafting.
 
 ## Process
@@ -38,7 +49,13 @@ Break the work into **tracer bullet** tickets.
 
 The sanctioned deviations are the ones this section already carries: mechanical prefactoring done first, and wide refactors sequenced as expand-contract below.
 
-Layers separate at **commit time, not ticket time**. A slice that carries real foundation weight still lands as one ticket, but as layered commits: the foundation commit first, then the behavior commit that makes the change user-facing, each made through the **/commit** skill and each leaving the build green. Every ticket says so explicitly; the templates below carry the line.
+Layers separate at **commit time, not ticket time**. A slice that carries real foundation weight still lands as one ticket, made through the **/commit** skill as a sequence of commits that each leave the build green.
+
+**Nothing lands before something needs it. This holds inside a ticket exactly as it holds between tickets.** The same rule that forbids a groundwork-only ticket forbids a groundwork-only commit. A type, a token, a field, a table, or a helper arrives in the same commit as the code that reads it. A commit whose output has no consumer is dead code: it fails a `-D warnings` build, and no suppression fixes it, because the defect is the split, not the lint.
+
+So a commit is separable only when it stands on its own: green, and with a consumer already present. Reachability, a migration that keeps existing callers working, a change to code that already has callers: those separate cleanly. A widget and the token it reads, a mode enum and the system that matches on it, a schema and its first query: those do not. When a layer cannot stand alone, it is not a separate commit.
+
+Write the ticket's Commits line from that test, naming which layers are separable and which are not. Never write it as a generic foundation-then-behavior formula: that formula is what produces the dead-code commit. When no layer is separable, say the slice is one commit.
 
 Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
@@ -69,6 +86,8 @@ Publish the approved tickets. **How** depends on the configured tracker; the tic
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
+Follow the repo's configured tracker location when it has one; the exploration effort's map names where its tracker lives, and the implementation tracker usually sits beside it (`docs/tickets/<effort>/` in repos that keep exploration under `docs/exploration/<effort>/`; `.scratch` is the default).
+
 Do NOT close or modify any parent issue.
 
 <local-ticket-template>
@@ -77,7 +96,7 @@ Do NOT close or modify any parent issue.
 
 **What to build:** the end-to-end behavior this ticket makes work, from the user's perspective, not a layer-by-layer implementation list.
 
-**Commits:** land the layers of this slice as separate commits via /commit: the foundation commit first, then the behavior commit. A slice with no foundation layer is one commit.
+**Commits:** land this slice as commits that each stand on their own via /commit. Name which layers are separable and which are not, per the ticket's own work: nothing lands before something needs it. A slice with no separable layer is one commit.
 
 **Blocked by:** the numbers/titles of the tickets that gate this one, or "None (can start immediately)".
 
@@ -100,7 +119,7 @@ The end-to-end behavior this ticket makes work, from the user's perspective, not
 
 ## Commits
 
-Land the layers of this slice as separate commits via /commit: the foundation commit first, then the behavior commit. A slice with no foundation layer is one commit.
+Land this slice as commits that each stand on their own via /commit. Name which layers are separable and which are not, per the ticket's own work: nothing lands before something needs it. A slice with no separable layer is one commit.
 
 ## Acceptance criteria
 

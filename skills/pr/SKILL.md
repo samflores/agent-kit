@@ -1,7 +1,6 @@
 ---
 name: pr
 description: "Open a pull request the right way: branch-based, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message (title, blank line, body) presented in a fenced block tagged pr-message, the turn ending with AWAITING APPROVAL, and the push plus gh pr create only after the user replies approved, using exactly the fenced text. PR body is a short opening paragraph plus a ## What changed section grouped by concern, not by file. Use when opening a PR, writing a PR description or title, or preparing a change for review. The drafted title and body go through the humanizer skill before they are presented."
-disable-model-invocation: true
 ---
 
 # pr

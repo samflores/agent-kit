@@ -19,33 +19,27 @@ Work:
 - Invoke the /implement skill with this ticket and follow it in full,
   including its commit-at-logical-points cadence: the branch lands as a
   sequence of clean commits, each one a self-contained logical layer,
-  never one undifferentiated blob. Each commit goes through the fence
-  protocol below: as each layer completes, present that commit's message
-  via the /commit skill, let it land on its approval, then proceed to the
-  next layer. When the ticket's Commits section names the layers, follow
-  it; when it does not, layer at the work's own logical points. A ticket
-  never needs to name its commits: layered landing is the default.
+  never one undifferentiated blob. When the ticket's Commits section names
+  the layers, follow it; when it does not, layer at the work's own logical
+  points. A ticket never needs to name its commits: layered landing is the
+  default.
+- Land each commit by invoking the /commit skill as that layer completes,
+  and follow it exactly. It governs the message, the fence, the approval
+  word, and the commit itself. Do not reconstruct its rules from memory or
+  from this prompt.
 
-Commits and the fence protocol:
-- Present the complete commit message (subject plus body) of the next
-  pending commit in a fenced code block tagged commit-message. One message
-  at a time; a new fence supersedes any earlier one.
-- After presenting a fence, END that turn with the final line
-  AWAITING APPROVAL. A reviewer fires at that line, before any approval:
-  review findings arrive as later messages. Fold the fixes into the
-  pending work, then re-present the fence (superseding the earlier one)
-  and end with AWAITING APPROVAL again.
-- Run git commit only after a later message in this session contains the
-  word approved (case-insensitive, whole word), and only after the
-  reviewer's PASS, using exactly the fenced text. The approval may come
-  from the user directly or relayed by the coordinator; both arm the gate
-  identically. If nobody replies, stay waiting; never commit silently.
-  One approval, one commit; repeat per commit until the ticket's work is
-  done.
-- Never amend or rewrite history.
-- Never push and never open a PR. PR mechanics belong to the coordinator,
-  which runs the /pr flow itself; the pr-message fence protocol never
-  applies to you.
+What the wave adds to /commit:
+- A reviewer fires at your AWAITING APPROVAL line, before any approval.
+  Review findings arrive as later messages: fold the fixes into the pending
+  work, then re-present the fence (superseding the earlier one) and end with
+  AWAITING APPROVAL again. Commit only after the reviewer's PASS.
+- The approval word may come from the user directly or relayed by the
+  coordinator. Both count.
+- Never push and never open a PR, and never invoke /pr. PR mechanics belong
+  to the coordinator, which runs that flow itself.
+
+If /commit is unavailable in this session, stop and report it with your
+BLOCKED sentinel rather than committing without it.
 
 One message at a time:
 - Answer the current message fully in one turn, then end the turn with

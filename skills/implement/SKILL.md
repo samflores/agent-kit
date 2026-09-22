@@ -7,7 +7,11 @@ Implement the work described by the user in the spec or tickets. Follow the spec
 
 Workflow position: this skill runs inside the **delivery phase** of the build workflow, on one implementation ticket that `/to-tickets` sliced from a settled `/exploration` plan, usually inside a `/coordinator` wave (one herdr tab, one worktree, one branch, one implementer). The authority chain is the ticket, then the effort map, then the exploration decisions behind it. Open questions are never decided here: stop and ask.
 
-Use /tdd where possible, at pre-agreed seams.
+Drive every change to behavior through /tdd: the failing test first, then the smallest production change that makes it pass. This is required, not optional, and it does not depend on a seam being agreed in advance.
+
+If you cannot follow /tdd for a given change, do not proceed without it and do not decide on your own that the change is exempt. Stop, report BLOCKED with the reason the cycle does not apply, and wait for the user to approve the exemption before writing the code.
+
+You are already on the ticket's branch when /tdd runs, so it creates none; commits go through /commit below, one fence and one approval each.
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 

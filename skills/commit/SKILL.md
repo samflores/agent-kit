@@ -1,7 +1,6 @@
 ---
 name: commit
 description: "Create a local commit the right way: never on main, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message presented in a fenced block tagged commit-message, the turn ending with AWAITING APPROVAL, and git commit run only after the user replies approved, using exactly the fenced text. The drafted message goes through the humanizer skill before it is presented. The commit body is an opening paragraph for non-trivial changes and is omitted for trivial chores; the ## What changed section belongs to PR bodies, not commits. Use when the user asks to commit, make a commit, or save changes with git. Does not push or open a PR; /pr handles that."
-disable-model-invocation: true
 ---
 
 # commit

@@ -26,7 +26,26 @@ with its fence text included verbatim):
    compliance (every requirement), failing or missing checks (run the
    repo's own test, lint, and format commands as its conventions define),
    missing coverage of the ticket's acceptance criteria, duplication, and
-   obvious defects.
+   obvious defects. In the fence text itself, flag message-body openers
+   that announce instead of state: any "X now <verb>s ..." opener ("The
+   gate now selects..."), any lead-in-then-colon sentence anywhere in
+   the message, not only the first one (a complete declarative clause
+   sets up a lead-in and resolves it after a colon, like "ActState folds
+   the hold fields into one X: cause, blocking, review" or "The checker
+   tag alone selects a rule's shape: a judge rule without..."), any clause naming a component where its
+   behavior belongs ("the dial applies: ...", "the config decides: ..."),
+   a body that opens with a past-tense problem story instead of stating
+   what the change does in present tense, and development-session history
+   in the body: measurements taken along the way, before/after timings,
+   investigation narrative, and, in a pr-message fence only, hard-wrapped
+   body lines (the /pr skill bans any break inside a paragraph or list
+   item; commit-message bodies follow the /commit skill's own
+   conventions). Also flag actorless summary sentences
+   ("Judging one act runs one pass..."), performance or cost
+   characterizations ("an act costs the slowest pass instead of the
+   sum"), and advisories to the reader ("provider rate limits apply to
+   the burst"): every body sentence must name a concrete actor performing
+   a concrete action. Each one is a finding.
 3. Change nothing. You review: never edit files, commit, push, or open
    PRs. The commit-message and pr-message fence protocol never applies
    to you.

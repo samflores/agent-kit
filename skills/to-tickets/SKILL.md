@@ -49,13 +49,7 @@ Break the work into **tracer bullet** tickets.
 
 The sanctioned deviations are the ones this section already carries: mechanical prefactoring done first, and wide refactors sequenced as expand-contract below.
 
-Layers separate at **commit time, not ticket time**. A slice that carries real foundation weight still lands as one ticket, made through the **/commit** skill as a sequence of commits that each leave the build green.
-
-**Nothing lands before something needs it. This holds inside a ticket exactly as it holds between tickets.** The same rule that forbids a groundwork-only ticket forbids a groundwork-only commit. A type, a token, a field, a table, or a helper arrives in the same commit as the code that reads it. A commit whose output has no consumer is dead code: it fails a `-D warnings` build, and no suppression fixes it, because the defect is the split, not the lint.
-
-So a commit is separable only when it stands on its own: green, and with a consumer already present. Reachability, a migration that keeps existing callers working, a change to code that already has callers: those separate cleanly. A widget and the token it reads, a mode enum and the system that matches on it, a schema and its first query: those do not. When a layer cannot stand alone, it is not a separate commit.
-
-Write the ticket's Commits line from that test, naming which layers are separable and which are not. Never write it as a generic foundation-then-behavior formula: that formula is what produces the dead-code commit. When no layer is separable, say the slice is one commit.
+Tickets do not define commits. Commit boundaries are the implementer's responsibility: the implementer commits often, at logical milestones inside the ticket, through /commit. A ticket that specifies commit boundaries is defective; fix the ticket, not the implementer.
 
 Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
@@ -96,8 +90,6 @@ Do NOT close or modify any parent issue.
 
 **What to build:** the end-to-end behavior this ticket makes work, from the user's perspective, not a layer-by-layer implementation list.
 
-**Commits:** land this slice as commits that each stand on their own via /commit. Name which layers are separable and which are not, per the ticket's own work: nothing lands before something needs it. A slice with no separable layer is one commit.
-
 **Blocked by:** the numbers/titles of the tickets that gate this one, or "None (can start immediately)".
 
 **Status:** ready-for-agent
@@ -117,9 +109,7 @@ A reference to the parent issue on the tracker (if the source was an existing is
 
 The end-to-end behavior this ticket makes work, from the user's perspective, not layer-by-layer implementation.
 
-## Commits
-
-Land this slice as commits that each stand on their own via /commit. Name which layers are separable and which are not, per the ticket's own work: nothing lands before something needs it. A slice with no separable layer is one commit.
+Commit often at logical milestones inside the ticket, through /commit. Commit boundaries are the implementer's judgment, not the ticket's.
 
 ## Acceptance criteria
 

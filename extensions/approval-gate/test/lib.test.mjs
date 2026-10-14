@@ -1,5 +1,13 @@
 import assert from "node:assert/strict";
-import { appendFileSync, copyFileSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  copyFileSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
@@ -19,6 +27,7 @@ import {
   parseFences,
   prPayload,
   readState,
+  REASON_NOT_ARMED,
   recordFence,
   sanitizeSessionId,
   shellTokens,
@@ -128,7 +137,7 @@ test("parseFences ignores an unterminated fence and takes the last of several", 
   assert.equal(latestFence(sequence).content, "second");
 });
 
-test("classify matches git commit and gh pr create wherever they appear", () => {
+test("classify matches a gated invocation at any command position", () => {
   const commits = [
     "git commit -m x",
     "git   commit -m x",
@@ -150,6 +159,35 @@ test("classify matches git commit and gh pr create wherever they appear", () => 
   ];
   for (const command of prCreates) {
     assert.deepEqual(classify(command), { commit: false, prCreate: true }, command);
+  }
+  const wrapped = [
+    "sh -c 'git commit -m x'",
+    'bash -c "git commit -m x"',
+    "/bin/sh -c 'git commit -m x'",
+    "env FOO=1 bash -c 'git commit -m x'",
+    "sudo -u x sh -c 'git commit -m x'",
+  ];
+  for (const command of wrapped) {
+    assert.deepEqual(
+      classify(command),
+      { commit: true, prCreate: false },
+      "a wrapper that executes its argument is still gated: " + command,
+    );
+  }
+  const prose = [
+    "herdr agent prompt impl 'present the message, then run git commit -F -'",
+    "echo 'the gate blocks git commit until approved'",
+    "cat <<'EOF'\nrun git commit when ready\nEOF",
+    "grep -rn 'gh pr create' docs/",
+    'rg "git commit" --files-with-matches',
+    "python3 -c \"print('git commit')\"",
+  ];
+  for (const command of prose) {
+    assert.deepEqual(
+      classify(command),
+      { commit: false, prCreate: false },
+      "prose must not be gated: " + command,
+    );
   }
   const others = [
     "git push origin main",
@@ -342,7 +380,7 @@ test("state files record, arm, consume, and supersede correctly", () => {
 test("approval with nothing pending is a no-op in strict mode", () => {
   withStateDir((dir) => {
     handleUserPromptSubmit({ stateDir: dir, sessionId: "fresh", prompt: "approved" });
-    assert.equal(readState(dir, "fresh"), null);
+    assert.equal(readState(dir, "fresh"), null, "a bare approval is still discarded");
     assert.equal(armState(dir, "also-fresh"), null);
   });
 });
@@ -357,17 +395,19 @@ test("a prompt without the approval word changes nothing, armed or not", () => {
   });
 });
 
-test("with strict fences off, the approval word arms with no fence on record", () => {
+test("no option arms the gate without a fence on record", () => {
   withStateDir((dir) => {
+    // strict:false was the documented fallback and is now meaningless.
+    // Passing it must not resurrect an arm-without-a-fence path.
     handleUserPromptSubmit({
       stateDir: dir,
       sessionId: "fallback",
       prompt: "approved",
       strict: false,
     });
-    const state = readState(dir, "fallback");
-    assert.equal(state.armed, true);
-    assert.equal(state.fence, null);
+    assert.equal(readState(dir, "fallback"), null, "nothing pending, nothing armed");
+    assert.equal(armState(dir, "fallback", Date.now(), { strict: false }), null);
+    assert.equal(readState(dir, "fallback"), null);
   });
 });
 
@@ -450,16 +490,100 @@ test("handleStop ignores fences that only appear in user entries", () => {
     const transcript = new URL("transcript-user-fence-only.jsonl", FIXTURES).pathname;
     const fence = handleStop(stopArgs(dir, transcript));
     assert.equal(fence, null);
-    assert.equal(readState(dir, "sess-stop"), null);
+    const state = readState(dir, "sess-stop");
+    assert.equal(state.fence, null, "a user-only fence is never recorded");
+    assert.equal(
+      state.transcript_error,
+      null,
+      "a readable transcript leaves no error marker",
+    );
   });
 });
 
-test("handleStop is a no-op with strict fences off or an unreadable transcript", () => {
+test("a readable transcript with no fence still writes state", () => {
+  withStateDir((dir) => {
+    const transcript = new URL("transcript-user-fence-only.jsonl", FIXTURES).pathname;
+    handleStop(stopArgs(dir, transcript));
+    assert.notEqual(
+      readState(dir, "sess-stop"),
+      null,
+      "an absent state file must mean the hook never ran, not that it found no fence",
+    );
+  });
+});
+
+test("an unreadable transcript records an error instead of staying silent", () => {
+  withStateDir((dir) => {
+    const missing = join(dir, "missing.jsonl");
+    assert.equal(handleStop(stopArgs(dir, missing)), null);
+    const state = readState(dir, "sess-stop");
+    assert.notEqual(state, null, "the hook ran, so it must leave a trace");
+    assert.equal(state.transcript_error, missing);
+  });
+});
+
+test("handleStop records the session cwd so a coordinator can map session to worktree", () => {
+  withStateDir((dir) => {
+    const transcript = join(dir, "transcript.jsonl");
+    copyFileSync(new URL("transcript-commit-fence.jsonl", FIXTURES), transcript);
+    handleStop({ ...stopArgs(dir, transcript), cwd: "/work/tree-a" });
+    assert.equal(readState(dir, "sess-stop").cwd, "/work/tree-a");
+  });
+});
+
+test("an approval carrying the approved text arms the matching fence recorded later", () => {
+  withStateDir((dir) => {
+    const transcript = join(dir, "transcript.jsonl");
+    copyFileSync(new URL("transcript-commit-fence.jsonl", FIXTURES), transcript);
+    const presented = latestFence(
+      readFileSync(transcript, "utf8")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .map((record) => {
+          const content = record.message?.content ?? record.content;
+          if (typeof content === "string") return content;
+          if (!Array.isArray(content)) return "";
+          return content.map((block) => block.text ?? "").join("\n");
+        })
+        .join("\n"),
+    );
+    // The approval lands before the agent's Stop hook has recorded anything.
+    handleUserPromptSubmit({
+      stateDir: dir,
+      sessionId: "sess-stop",
+      prompt: "approved\n\n```commit-message\n" + presented.content + "\n```",
+    });
+    assert.equal(readState(dir, "sess-stop").armed, false, "nothing to arm yet");
+    handleStop(stopArgs(dir, transcript));
+    const state = readState(dir, "sess-stop");
+    assert.equal(state.armed, true, "the matching fence picks up the deferred approval");
+    assert.equal(state.approved_hash, null, "the deferred approval is spent once used");
+  });
+});
+
+test("a deferred approval never arms text it did not approve", () => {
+  withStateDir((dir) => {
+    const transcript = join(dir, "transcript.jsonl");
+    copyFileSync(new URL("transcript-commit-fence.jsonl", FIXTURES), transcript);
+    handleUserPromptSubmit({
+      stateDir: dir,
+      sessionId: "sess-stop",
+      prompt: "approved\n\n```commit-message\nsome entirely different message\n```",
+    });
+    handleStop(stopArgs(dir, transcript));
+    const state = readState(dir, "sess-stop");
+    assert.notEqual(state.fence, null, "the presented fence is still recorded");
+    assert.equal(state.armed, false, "but an approval for other text must not arm it");
+  });
+});
+
+test("handleStop always scans for fences and cannot be switched off", () => {
   withStateDir((dir) => {
     const transcript = new URL("transcript-commit-fence.jsonl", FIXTURES).pathname;
-    assert.equal(handleStop({ ...stopArgs(dir, transcript), strict: false }), null);
-    assert.equal(readState(dir, "sess-stop"), null);
-    assert.equal(handleStop(stopArgs(dir, join(dir, "missing.jsonl"))), null);
+    const fence = handleStop({ ...stopArgs(dir, transcript), strict: false });
+    assert.notEqual(fence, null, "a stale strict:false must not skip fence scanning");
+    assert.equal(readState(dir, "sess-stop").fence.type, "commit-message");
   });
 });
 
@@ -628,23 +752,24 @@ test("enforce leaves ungated commands alone, armed or not", () => {
   });
 });
 
-test("with strict fences off, an armed no-fence state allows without a payload check", () => {
+test("an armed state with no fence is refused, never allowed unchecked", () => {
   withStateDir((dir) => {
-    handleUserPromptSubmit({
-      stateDir: dir,
-      sessionId: "fallback",
-      prompt: "approved",
-      strict: false,
-    });
+    // Hand-write the state the old fallback used to produce. Even armed,
+    // a missing fence leaves nothing to check the payload against, so the
+    // command must be refused rather than allowed.
+    writeFileSync(
+      join(dir, "forged"),
+      JSON.stringify({ fence: null, armed: true, entries_seen: 0, created: 1, updated: 1 }),
+    );
     const result = enforce({
       stateDir: dir,
-      sessionId: "fallback",
+      sessionId: "forged",
       command: 'git commit -m "anything at all"',
       cwd: "/tmp",
       branch: () => "feat/x",
     });
-    assert.deepEqual(result, { allow: true, reason: null });
-    assert.equal(readState(dir, "fallback").armed, false);
+    assert.equal(result.allow, false, "an unchecked commit must never be allowed");
+    assert.equal(result.reason, REASON_NOT_ARMED);
   });
 });
 
@@ -674,4 +799,22 @@ test("an internal failure blocks the gated command instead of failing open", () 
   });
   assert.equal(result.allow, false);
   assert.match(result.reason, /internal error/);
+});
+
+test("re-recording an identical fence keeps an existing arm", () => {
+  withStateDir((dir) => {
+    const session = "sess-rearm";
+    const fence = { type: "commit-message", content: "subject\n\nbody" };
+    recordFence(dir, session, fence, 3, 1000);
+    handleUserPromptSubmit({ stateDir: dir, sessionId: session, prompt: "approved", now: 2000 });
+    assert.equal(readState(dir, session).armed, true);
+    // The approval turn appends transcript entries carrying the same fence,
+    // so the next Stop hook rescans and re-records it. The arm must survive:
+    // the commit it authorises has not run yet.
+    recordFence(dir, session, fence, 7, 3000);
+    const state = readState(dir, session);
+    assert.equal(state.armed, true, "an identical fence must not disarm");
+    assert.equal(state.fence.hash, hashDraft(fence.content));
+    assert.equal(state.entries_seen, 7, "the transcript marker still advances");
+  });
 });

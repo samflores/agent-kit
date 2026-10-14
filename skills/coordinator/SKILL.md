@@ -1,6 +1,6 @@
 ---
 name: coordinator
-description: "Run waves of build tickets end to end: one git worktree and one herdr tab per unblocked ticket in the current workspace, implementer and reviewer agents (Pi or Claude Code) in split panes, review firing at each AWAITING APPROVAL before the approval word so every commit lands exactly as reviewed (layered commits at logical points are the default), sentinel polling every 30 seconds, verbatim relaying of approvals, answers, and review findings, PRs through /pr with the stacked option always presented, and teardown after merges with ticket outcomes recorded first. The coordinator never implements ticket work; infrastructure operations are in scope."
+description: "Run waves of build tickets end to end through herdr: one worktree and herdr tab per unblocked ticket, implementer and reviewer agents in split panes, review firing at each AWAITING APPROVAL before the approval word, sentinel polling, verbatim relays, PRs through /pr with the stacked option presented, teardown after merges. The coordinator never implements ticket work."
 disable-model-invocation: true
 ---
 

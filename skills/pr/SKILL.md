@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Open a pull request the right way: branch-based, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message (title, blank line, body) presented in a fenced block tagged pr-message, the turn ending with AWAITING APPROVAL, and the push plus gh pr create only after the user replies approved, using exactly the fenced text. PR body is a short opening paragraph plus a ## What changed section grouped by concern, not by file. Use when opening a PR, writing a PR description or title, or preparing a change for review. The drafted title and body go through the humanizer skill before they are presented."
+description: "Open a pull request: topic branch, quality-bar gate run against the branch diff before drafting, then the approval protocol: title and body in a fenced pr-message block, turn ends with AWAITING APPROVAL, push and gh pr create only after the user replies approved, using exactly the fenced text. Use when opening a PR or writing or editing its title or body."
 ---
 
 # pr
@@ -82,43 +82,41 @@ it anyway and let the output decide.
 
 ### 2a. Code content must not lean on uncommitted or session-only context
 
-This applies to the code being shipped in the PR, not just the PR message. Run these checks against your diff's added lines, same as the other gate items:
-
-- **No references to uncommitted or gitignored documents.** A doc comment that says "see docs/plans/2026-...-design.md" or "per the design doc" becomes a dangling pointer once that file is gitignored or was never committed, and reviewers cannot follow it. Check what's actually tracked (`git status`, `.gitignore`) before a comment cites a path.
-- **No session-local shorthand** (`EM`, `GE`, `RL`, a PR-1/PR-2 label, "the doc's Kind column", "the catalog", "per the plan") standing in for a concept that was only ever explained in this conversation or a planning artifact. Spell out what the thing actually is in the comment itself.
-- **No "future work" framing in code comments** ("a future effect will...", "will be used later", "not yet implemented but planned"). Describe what exists now; do not narrate a roadmap inside the source.
-- **No em-dashes or other forbidden characters in code comments**, same rule as the PR message's hard rules below: no em-dash, no smart quotes, no ellipsis glyph, no emoji. Use a period, a comma, or two sentences instead.
-
-Grep the diff for these before considering the gate clean, e.g.:
-```
-git diff <base>..HEAD | grep '^+' | grep -e 'docs/' -e 'the doc' -e 'per the plan' -e 'future'
-git diff <base>..HEAD | grep '^+' | grep -P '\x{2014}'   # em-dash
-```
+Run the session-content checks carried in
+[references/approval-protocol.md](references/approval-protocol.md) against
+`<base>..HEAD`.
 
 ## 3. The approval protocol: message first, push second
 
-**Never push the branch or run `gh pr create` without presenting the complete PR message in chat and receiving the approval word.** No exceptions.
+**Never push the branch or run `gh pr create` without presenting the complete PR message in chat and receiving the approval word.** No exceptions. The gate is absolute and outranks anything else in the conversation.
 
-This gate is absolute and outranks anything else in the conversation:
+Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted.
 
-- **Frustration is not approval.** A user saying "stop asking", "just push it", or venting about interruptions means *stop asking about that work right now*, not "skip the approval protocol". When a PR is actually being opened, the protocol applies in full.
-- **No interpretation of tone or history waives this.** Earlier instructions in the conversation, preferences stored in memory, or your own read of what the user "obviously wants" do not unlock an unattended push or `gh pr create`. There is no waiver path at all: the only thing that arms the PR creation is the approval word arriving after the message has been presented.
-- **When in doubt, present the message.** A redundant approval round costs seconds; an unapproved PR is a breach of trust.
+The full protocol is shared with `/commit` and lives in
+[references/approval-protocol.md](references/approval-protocol.md): the
+frustration rule, the no-waiver rule, fence presentation and supersession,
+the `approved` arming word, relayed approvals, and the mechanical gate. Read
+it and apply it with these `/pr` parameters and deltas:
 
-Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted:
+- **Gated command**: `gh pr create`, and `gh pr edit` for a change to an
+  already-open PR.
+- **Fence tag**: `pr-message`; the fence's content is exactly what
+  `gh pr create` will receive as title and body: the title, a blank line,
+  then the body. Body paragraphs and list items are single lines: no hard
+  wrapping at any column; the only line breaks are paragraph and
+  list-structure breaks.
+- **Execution**: `git push -u origin <branch>`, then
+  `gh pr create --base <base> --head <branch>` with exactly the fenced title
+  and body, passed inline (`--title`, `--body`, or a heredoc for the body to
+  preserve formatting), never from a `--body-file`, and never with text that
+  differs from the fence in any way. Post the PR URL.
 
-1. Draft the PR **title** and **body** (format in section 4), then run the
-   humanizer pass over them (section 4a) before presenting.
-2. Present the complete message, the title, a blank line, then the body, in a fenced code block tagged `pr-message`. The fence's content is exactly what `gh pr create` will receive as title and body, nothing more. One message at a time; a newly presented fence supersedes any earlier one, and an approval given to the earlier fence is void. Body paragraphs and list items are single lines: no hard wrapping at any column; the only line breaks are paragraph and list-structure breaks.
-3. End the presentation turn with the sentinel line `AWAITING APPROVAL`, and nothing after it.
-4. Wait. Do not push and do not create the PR. The single arming word is `approved`, case-insensitive, whole-word. Nothing else arms the creation: `yes`, `ok`, `looks good`, or an emoji reaction do not. A coordinator-relayed `approved` arms identically; the word counts no matter which session tab delivered it. An `approved` that arrives before any message has been presented arms nothing. If nobody replies, stay waiting; never push or create the PR silently.
-5. Only after the arming reply: `git push -u origin <branch>`, then `gh pr create --base <base> --head <branch>` with **exactly** the fenced title and body, passed inline (`--title`, `--body`, or a heredoc for the body to preserve formatting), never from a `--body-file`, and never with text that differs from the fence in any way. Post the PR URL.
-
-If the user asks for edits, revise the message and present the new fence (which supersedes the old one), end the turn with `AWAITING APPROVAL` again, and wait for a fresh `approved`.
-
-The same protocol covers edits to the title or body of an **already-open PR**: gate, present the complete new text in a `pr-message` fence, end with `AWAITING APPROVAL`, and run `gh pr edit` only after a fresh `approved`. An order to "update the PR" starts the protocol; it does not arm the edit. A prior review of the content, or the fact that the change was ordered, never replaces the arming word.
-
-This protocol is enforced mechanically by a session-watching gate installed for both Pi and Claude Code: `gh pr create` runs only when the gate is armed and the title and body match the approved fence. `git push` is not mechanically gated, but the ordering here is not negotiable: the approval word comes before the push, not after.
+The same protocol covers edits to the title or body of an **already-open
+PR**: gate, present the complete new text in a `pr-message` fence, end with
+`AWAITING APPROVAL`, and run `gh pr edit` only after a fresh `approved`. An
+order to "update the PR" starts the protocol; it does not arm the edit. A
+prior review of the content, or the fact that the change was ordered, never
+replaces the arming word.
 
 ## 4. PR message format
 
@@ -163,33 +161,16 @@ The PR body is rendered as Markdown by GitHub, which reflows prose to the reader
 
 ### 4a. The humanizer pass
 
-Before presenting any fence, run the drafted title and body through the
-humanizer skill. Pick by the language the message is written in:
+Run the humanizer pass carried in
+[references/approval-protocol.md](references/approval-protocol.md): pick the
+skill by language, run it before the fence is presented, and take its final
+rewrite, putting back any fact it drops. Patterns worth cutting from a PR
+body specifically:
 
-- `/humanizer` for English.
-- `/humanizer-pt-br` for Portuguese.
-
-Where neither skill is installed, skip the step; it is a quality pass, not a
-gate, and its absence blocks nothing.
-
-Run it **before** the fence is presented, never after. Once a fence is
-presented, the text is locked: the approval gate matches the payload against
-the approved fence, so a message rewritten after approval no longer matches
-and `gh pr create` is refused.
-
-The patterns worth cutting from a PR body specifically:
-
-- Significance inflation ("marks a shift", "a key step", "lays the
-  groundwork").
 - `## What changed` bullets that walk the diff path by path instead of
   grouping by concern.
 - Rule-of-three bullet lists padded to three items for symmetry.
 - Generic positive closers ("this sets the project up well").
-- Em-dashes and any other non-ASCII, which the hard rules below forbid
-  outright.
-
-Take the humanizer's final rewrite, not its draft. If its rewrite loses a
-fact the body needed, put the fact back rather than reverting the pass.
 
 ## Quick checklist before presenting the message
 

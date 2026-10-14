@@ -22,17 +22,28 @@ command through per approval.
   commit message as subject plus body, a PR message as title, blank
   line, body. One message at a time; a newly presented fence supersedes
   any pending or armed one.
-- The user replies with a message containing the word `approved`. An
+- The user replies with a message containing the word `approved`. A bare
   approval with nothing pending is a no-op; any other reply changes
   nothing.
+- An approval may also carry the approved text in a fenced block. With
+  nothing pending the gate holds that text's hash, and the matching
+  fence arms itself the moment it is recorded. This makes the relay
+  order-independent: a coordinator can approve before the agent has
+  presented. A held approval only ever arms the exact text it approved,
+  so it can never authorize a message the user did not read.
 - The gated command runs only when armed, only when its payload equals
   the fenced text after normalization (trailing whitespace per line and
   trailing blank lines stripped), and only off `main`. The arm is
   consumed on success; a blocked attempt keeps the arm so a corrected
   retry needs no fresh approval.
 
-Gated commands, matched by a best-effort scan of the shell command
-string:
+Gated commands, matched where a command can actually start: the start
+of the string, just after a shell separator or subshell paren, or inside
+the quoted argument of a wrapper that executes it (`sh -c`, `env`,
+`sudo`, and friends). A command that merely mentions a gated invocation
+in prose or in a quoted search pattern is not gated, so a coordinator
+relaying instructions to an agent is not blocked by its own prompt
+text:
 
 - `git commit` in every form: `-m`/`--message` single or repeated
   (paragraphs joined by a blank line), the heredoc-inside-substitution
@@ -94,21 +105,33 @@ Event wiring:
   every assistant turn, which is when the fence has been fully written
   to the transcript. Fences in user entries are ignored, and entries
   already processed are never rescanned, so a consumed fence cannot come
-  back.
+  back. An unreadable transcript records `transcript_error` rather than
+  returning silently, and a readable one with no fence still writes
+  state: an absent state file therefore means the hooks never ran, not
+  that the hook ran and saw nothing. Each write also records the
+  session's `cwd`, so a coordinator can map a session id to the worktree
+  that owns it.
 - `userpromptsubmit`: arms the pending fence when the prompt contains
-  the approval word.
+  the approval word. When the prompt also carries a fence and nothing is
+  pending, the approved text's hash is held for the fence recorded next.
 - `pretooluse`: matcher `Bash`; enforces on `tool_input.command`. A
   blocked command exits 2 with the reason on stderr, which Claude Code
   surfaces as the denial.
 
-## Fallback
+## No bypass
 
-`AG_GATE_STRICT_FENCES=0` disables transcript fence scanning. The
-approval word alone arms the gate, and an armed command with no fence on
-record runs without a payload check (the fence-dependent checks, such as
-the demand for `-m` with the exact text, are skipped with it). This is
-the documented fallback for unreliable transcript parsing; strict
-matching is the default and the safe mode.
+Every allowed command has its payload checked against a fence the user
+approved. There is no mode, flag, or environment variable that skips
+that check.
+
+`AG_GATE_STRICT_FENCES=0` used to disable fence scanning and let the
+approval word alone authorize any payload. That was a bypass rather than
+a fallback: it turned the gate off from the environment, which anything
+running under the hook can set. It has been removed. Setting the
+variable now does nothing.
+
+An armed state with no fence on record is refused, not allowed. Fence
+scanning always runs.
 
 ## State
 

@@ -178,6 +178,15 @@ The `/worktree-setup` skill configures this once per repo. Run it before
 the first wave; a wave spawned into worktrees missing those files fails
 inside the tab, where the cause is hard to see.
 
+**Read [references/wave-setup-checklist.md](references/wave-setup-checklist.md)
+before spawning.** It carries every setup item that has cost a wave:
+absolute worktree paths, the per-worktree exclude file (a main checkout's
+.gitignore does not reach a worktree), mise trust (an untrusted .mise.toml
+disables every hook and so the whole approval gate), directory trust for
+hook loading, pane environment before agent start, the Monitor shape that
+works, the prompt items that each cost a BLOCKED turn, and the gate check
+that must precede every approval relay. Do not re-derive these.
+
 ## Sentinels
 
 Every implementer turn ends with exactly one final line, machine-greppable,
@@ -285,10 +294,14 @@ an approved one.
    the branch's first commit, the previously landed commit for every
    later one). When the pending item is
    the PR message, include the fence text itself in the request; the
-   reviewer has no other way to read it:
+   reviewer has no other way to read it. Read the implementer's full
+   settled turn, not a tail window, and relay its report into the
+   request verbatim: the diagnosed cause, what changed and why, tests
+   added, gates run, and any self-noted caveats or deviations. The
+   reviewer reviews that report, not the coordinator's summary of it:
 
    ```bash
-   herdr agent prompt rev-<slug> "Review request: ticket <path>; branch feat/<slug>; base <base ref from the wave state>; pending: <the branch's next commit, or the PR message with its fence text>."
+   herdr agent prompt rev-<slug> "Review request: ticket <path>; branch feat/<slug>; base <base ref from the wave state>; pending: <the branch's next commit, or the PR message with its fence text>. Implementer report, verbatim: <...>."
    ```
 
 2. The reviewer writes a structured report (verdict, numbered findings,
@@ -318,29 +331,44 @@ Every fence is reviewed before any approval is sought: the reviewer fires
 at `AWAITING APPROVAL` (review protocol, previous section), and only its
 PASS puts the fence in front of the user. The user approves in the
 implementer tab, or in the coordinator chat. When the approval happens in
-the coordinator chat, relay it verbatim, as its own message:
+the coordinator chat, **relay the word together with the approved text**,
+as its own message:
 
 ```bash
-herdr agent prompt impl-<slug> "approved"
+herdr agent prompt impl-<slug> "$(cat <<'EOF'
+approved
+
+```commit-message
+<the exact fence text the reviewer passed and the user approved>
+```
+EOF
+)"
 ```
 
-**Where the gate is registered, confirm the fence is recorded before
-relaying.** The gate arms a *pending* fence, and an approval arriving with
-nothing pending is a silent no-op: the word is consumed, the commit does
-not land, and the implementer reports a gate that will not arm. The race is
-easy to lose, because the sentinel appears on screen before the `Stop` hook
-that records the fence has run, and the wake fires on the sentinel.
+Carrying the text is what makes the relay order-independent. The gate
+binds the approval to that exact message: if the fence is already
+recorded it arms immediately, and if the relay wins the race against the
+agent's `Stop` hook the gate holds the approved text's hash and arms the
+matching fence the moment it is recorded. Either order lands the commit
+with no second approval.
 
-The gate's state file is the authority
-(`~/.cache/agent-kit/approval-gate/<agent-session-id>`, the session id being
-the `agent_session.value` that `agent start` returned). Poll it until
-`.fence.type` is non-null and `.armed` is false, then relay. A cleared
+The text must be the fence verbatim, since the gate arms only on an exact
+match. An approval carrying different text leaves the fence unarmed, by
+design: it is the gate refusing to authorize a message the user did not
+read. If that happens, re-read the fence and relay again rather than
+asking the user to re-approve.
+
+A bare `approved` with nothing pending is still a silent no-op, so relay
+the word alone only when the fence is known to be on record.
+
+The gate's state file
+(`~/.cache/agent-kit/approval-gate/<agent-session-id>`, the session id
+being the `agent_session.value` that `agent start` returned) records the
+session's `cwd`, which identifies the worktree that owns it. A cleared
 fence (`"fence": null`) after a relay is the gate confirming it consumed
-the arm; pair it with `git log` to see the commit that landed.
-
-An approval the gate ignored is not recoverable by waiting: the word is
-spent. Ask the user to approve again once the fence is recorded, and say
-why rather than re-sending an approval they did not give.
+the arm; pair it with `git log` to see the commit that landed. A
+`transcript_error` field means the hook ran but could not read its
+transcript; no state file at all means the hooks never ran.
 
 The single arming word is `approved` (case-insensitive, whole word). One
 approval runs one gated command with exactly the fenced text: findings were
@@ -399,6 +427,16 @@ merged ticket, in this order:
    git -C "$REPO" fetch origin
    git -C "$REPO" pull --ff-only origin main
    ```
+
+   Then gate the merged tip before any teardown step: run the full
+   golem-gates set (fmt, `clippy --workspace --all-targets -- -D
+   warnings`, `test --workspace` under `RUSTUP_TOOLCHAIN=1.96.1`) in the
+   main checkout. Branch fences and PR CI gate branches against their
+   own bases; a merge can combine two green branches into a red tip and
+   nobody else builds that combination. Red gates stop the teardown:
+   report the failure to the user and get a repair moving before closing
+   anything. This rule exists because SAM-38 + SAM-39 merged green
+   branches into a red main that sat for three hours.
 
 3. Close the tab, remove the worktree, delete the branches, delete the
    review file:
@@ -462,6 +500,50 @@ When the user chooses to stack the next wave on unmerged PRs:
 - The map and the ticket files are the only status surface. The tracker is
   local-only: gitignored, never pushed. Worktrees are gitignored and never
   referenced from the tracker.
+
+## Prompt discipline
+
+Prompt text the agents copy verbatim: code inside a relayed prompt or
+review finding must already match the target project's conventions
+(imports over fully qualified paths, ASCII only, no em-dashes). An
+implementer copies a snippet's style literally, the reviewer then flags
+it, and the style fix burns a full round of turns and tokens. Proofread
+snippets against the project's quality bar before sending; a style slip
+in prompt text is a coordinator defect, not an agent one.
+
+Agent scope ends at declared resources: the agent's worktree plus paths
+named in its prompt. Any write outside them is a coordinator defect even
+when the agent volunteers it. Two real failures, both October 2026:
+
+1. An implementer edited five machine-local files under ~/.config/golem/
+   (user config packs and coordinator-built hand-test fixtures) because
+   its prompt said "every rules pack parses unchanged" and the packs were
+   not in the repo. It hunted the home directory, edited, and reported
+   the writes as a completed fact. The correct move: BLOCKED: with the
+   missing paths, before touching anything outside the worktree.
+2. The wave record recorded the re-tag decision but not the pack paths,
+   so nothing the agent could consult named its actual resources.
+
+Rules: spawn prompts enumerate every path the agent may write, including
+machine-local ones, or state "repo worktree only". Ownership of files
+outside the repo (user config, hand-test fixtures) is explicit per wave:
+either the owner migrates them, or the coordinator does, never the tab
+agents unprompted. When relaying a mid-wave owner decision that expands
+scope, name the exact files in the relay. Agents discover resources by
+searching the filesystem only on an explicit instruction naming the
+search location; never on inference.
+
+Scope rulings get restated, never inferred. When an owner ruling can
+carry two scopes (a short reply answering several questions, a "one
+ticket" that can mean merge-these or cover-everything), the coordinator
+restates it as a concrete scope statement (modules in, modules out,
+ticket count) and waits for a yes before cutting or publishing tickets.
+SAM-44, October 2026: the owner's "one ticket. watch list out. no"
+answered a three-part question; the coordinator read merge-the-three
+and exclude-the-watch-list, published the narrow ticket, and the wave
+faithfully built the wrong scope. Never infer scope from which reading
+makes the proposal smaller. Frustration in the owner's message is a
+reason to restate, never a waiver.
 
 ## Prompt templates
 

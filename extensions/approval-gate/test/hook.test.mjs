@@ -252,34 +252,33 @@ test("the TTL sweep deletes state files older than 14 days on every core run", (
   });
 });
 
-test("with AG_GATE_STRICT_FENCES=0 the approval word alone arms the gate", () => {
+test("AG_GATE_STRICT_FENCES=0 no longer bypasses the payload check", () => {
   const home = makeHome();
   const repo = makeRepo(false);
   const session = "99999999-9999-9999-9999-999999999999";
   withSession(home, repo, () => {
+    const env = { AG_GATE_STRICT_FENCES: "0" };
     const stop = runCore(
       "stop",
       stopPayload(session, "transcript-commit-fence.jsonl"),
       home,
-      { AG_GATE_STRICT_FENCES: "0" },
+      env,
     );
     assert.equal(stop.status, 0);
     assert.equal(
       existsSync(stateFile(home, session)),
-      false,
-      "the stop event does not scan fences in fallback mode",
+      true,
+      "the stop event scans fences regardless of the old fallback variable",
     );
-    const prompt = runCore("userpromptsubmit", promptPayload(session, "approved"), home, {
-      AG_GATE_STRICT_FENCES: "0",
-    });
+    const prompt = runCore("userpromptsubmit", promptPayload(session, "approved"), home, env);
     assert.equal(prompt.status, 0);
     const commit = runCore(
       "pretooluse",
       toolPayload(session, 'git commit -m "text that matches no fence"', repo),
       home,
-      { AG_GATE_STRICT_FENCES: "0" },
+      env,
     );
-    assert.equal(commit.status, 0);
+    assert.equal(commit.status, 2, "a payload matching no fence is blocked, env var or not");
   });
 });
 

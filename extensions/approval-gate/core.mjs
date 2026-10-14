@@ -15,10 +15,6 @@ function readStdin() {
   }
 }
 
-function strictFences() {
-  return process.env.AG_GATE_STRICT_FENCES !== "0";
-}
-
 const payload = (() => {
   try {
     return JSON.parse(readStdin() || "{}");
@@ -30,14 +26,13 @@ const payload = (() => {
 const event = (process.argv[2] ?? payload.hook_event_name ?? "").toLowerCase();
 const stateDir = stateDirFor();
 sweepState(stateDir);
-const strict = strictFences();
 
 if (event === "stop") {
   handleStop({
     stateDir,
     sessionId: payload.session_id,
     transcriptPath: payload.transcript_path,
-    strict,
+    cwd: payload.cwd || process.cwd(),
   });
   process.exit(0);
 }
@@ -47,7 +42,6 @@ if (event === "userpromptsubmit") {
     stateDir,
     sessionId: payload.session_id,
     prompt: payload.prompt,
-    strict,
   });
   process.exit(0);
 }

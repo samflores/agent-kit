@@ -15,7 +15,7 @@ You are already on the ticket's branch when /tdd runs, so it creates none; commi
 
 Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 
-Commit at logical points using /commit. This is required, not optional. Present each commit or PR message in full, in a fenced code block tagged commit-message or pr-message: the commit message as subject plus body, the PR message as title, blank line, body. One message at a time. Run the commit or PR creation using exactly the fenced text, and only after a later reply in this session contains the word approved. If nobody replies, stay waiting; do not commit.
+Commit whenever the ticket reaches a new working state: a feature that works end-to-end, a test suite that passes after a meaningful change, a refactor that leaves the build green. Do not commit at every change; commit at milestones that represent real progress. Do not accumulate large diffs. This is required, not optional. Present each commit or PR message in full, in a fenced code block tagged commit-message or pr-message: the commit message as subject plus body, the PR message as title, blank line, body. One message at a time. Run the commit or PR creation using exactly the fenced text, and only after a later reply in this session contains the word approved. If nobody replies, stay waiting; do not commit.
 
 Stop and ask the user whenever you are blocked, for any reason.
 

@@ -79,3 +79,12 @@ Sentinel classification reads the settled turn via `agent read`, with
 status-bar and separator lines filtered. The pane's literal last line is
 always the status bar, so `pane wait-output --lines 1` never sees the
 sentinel.
+
+The sentinel is a packet contract: it exists only if the packet
+instructs the agent to end its final message with the sentinel line.
+The coordinator templates carry that instruction; any hand-rolled
+prompt, a prototype packet or a one-off research prompt, must repeat
+it verbatim: end the final message with IMPLEMENTATION COMPLETE, or
+with BLOCKED: <reason> when unable to proceed, and send nothing after
+it. An agent that ends in prose never wakes the coordinator, and
+silence reads exactly like work in progress.

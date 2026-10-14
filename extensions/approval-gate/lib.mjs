@@ -116,8 +116,32 @@ export function latestFence(text) {
   return fences.length > 0 ? fences[fences.length - 1] : null;
 }
 
-const gitCommitRe = /\bgit\s+commit\b/;
-const ghPrCreateRe = /\bgh\s+pr\s+create\b/;
+/**
+ * A gated invocation counts only where a command can actually start: at
+ * the beginning of the string, or just after a shell separator
+ * (newline ; && || | &) or an opening subshell paren.
+ *
+ * A quoted string is a command start only when it is the argument of a
+ * wrapper that executes it, so `sh -c '...'` stays gated while a quoted
+ * mention inside some other command does not. Prose relayed to an agent,
+ * or a grep for the phrase, is not a command the caller is running.
+ */
+const SEPARATOR_START = String.raw`(?:^|[\n;&|(])\s*`;
+const WRAPPER = String.raw`(?:[a-z/]*sh|env|xargs|time|nohup|sudo|doas)`;
+const WRAPPER_ARG = String.raw`(?:-[^\s]+(?:\s+[^-\s][^\s]*)?|[A-Za-z_][A-Za-z0-9_]*=[^\s]*)`;
+const WRAPPER_START =
+  String.raw`(?:^|[\n;&|(])\s*` +
+  "(?:" + WRAPPER + String.raw`\s+` + "(?:" + WRAPPER_ARG + String.raw`\s+` + ")*)+" +
+  String.raw`['"]`;
+
+function gatedRe(invocation) {
+  return new RegExp(
+    "(?:" + SEPARATOR_START + "|" + WRAPPER_START + ")" + invocation,
+  );
+}
+
+const gitCommitRe = gatedRe(String.raw`git\s+commit\b`);
+const ghPrCreateRe = gatedRe(String.raw`gh\s+pr\s+create\b`);
 
 /**
  * Best-effort classification of a shell command string. Only git commit
@@ -676,7 +700,10 @@ export function readState(stateDir, sessionId) {
     return {
       fence: normalizedFence(parsed.fence),
       armed: parsed.armed === true,
+      approved_hash: typeof parsed.approved_hash === "string" ? parsed.approved_hash : null,
       entries_seen: Number.isFinite(parsed.entries_seen) ? parsed.entries_seen : 0,
+      cwd: typeof parsed.cwd === "string" ? parsed.cwd : null,
+      transcript_error: typeof parsed.transcript_error === "string" ? parsed.transcript_error : null,
       created: Number(parsed.created) || 0,
       updated: Number(parsed.updated) || 0,
     };
@@ -694,13 +721,26 @@ function writeState(stateDir, sessionId, state) {
 
 /**
  * Records a presented fence as pending. A new fence replaces any pending
- * or armed state (supersession); the arm always resets to false.
+ * or armed state (supersession); the arm resets to false.
+ *
+ * Re-recording the fence already on file keeps the arm. The approval turn
+ * appends transcript entries that still carry the fence, so the next Stop
+ * hook rescans them and records the same fence again. Disarming there would
+ * destroy the arm before the commit it authorises ever runs.
  */
 export function recordFence(stateDir, sessionId, fence, entriesSeen, now = Date.now()) {
   const previous = readState(stateDir, sessionId);
+  const hash = hashDraft(fence.content);
+  const unchanged = previous?.fence?.type === fence.type && previous?.fence?.hash === hash;
+  // A deferred approval (the word arrived before this fence was recorded)
+  // arms only the exact text it approved. Any other fence supersedes it
+  // unarmed, so an early approval can never authorize unseen text.
+  const deferred = previous?.approved_hash != null && previous.approved_hash === hash;
   writeState(stateDir, sessionId, {
-    fence: { type: fence.type, hash: hashDraft(fence.content) },
-    armed: false,
+    ...previous,
+    fence: { type: fence.type, hash },
+    armed: unchanged ? previous.armed === true : deferred,
+    approved_hash: null,
     entries_seen: entriesSeen,
     created: previous?.created ?? now,
     updated: now,
@@ -708,12 +748,12 @@ export function recordFence(stateDir, sessionId, fence, entriesSeen, now = Date.
 }
 
 /**
- * Arms the pending fence when the text carries the approval word. An
- * approval with nothing pending is a no-op in strict mode; with strict
- * fences disabled it arms without a fence, the documented fallback.
- * Text without the approval word changes nothing.
+ * Arms the pending fence when the text carries the approval word. A bare
+ * approval with nothing pending is a no-op: there is no way to arm the
+ * gate without a fence to check a payload against. Text without the
+ * approval word changes nothing.
  */
-export function armState(stateDir, sessionId, now = Date.now(), { strict = true } = {}) {
+export function armState(stateDir, sessionId, now = Date.now(), { approvedHash = null } = {}) {
   const state = readState(stateDir, sessionId);
   if (state?.fence) {
     if (state.armed) return state;
@@ -721,10 +761,15 @@ export function armState(stateDir, sessionId, now = Date.now(), { strict = true 
     writeState(stateDir, sessionId, next);
     return next;
   }
-  if (!strict) {
+  // Nothing pending yet. When the approval carries the approved text, hold
+  // its hash so the matching fence arms itself the moment it is recorded.
+  // A bare approval with nothing pending stays a no-op.
+  if (approvedHash) {
     const next = {
+      ...state,
       fence: null,
-      armed: true,
+      armed: false,
+      approved_hash: approvedHash,
       entries_seen: state?.entries_seen ?? 0,
       created: state?.created ?? now,
       updated: now,
@@ -748,8 +793,55 @@ export function consumeState(stateDir, sessionId, now = Date.now()) {
 
 function markEntriesSeen(stateDir, sessionId, entriesSeen, now) {
   const state = readState(stateDir, sessionId);
-  if (!state) return;
-  writeState(stateDir, sessionId, { ...state, entries_seen: entriesSeen, updated: now });
+  if (!state) {
+    writeState(stateDir, sessionId, {
+      fence: null,
+      armed: false,
+      approved_hash: null,
+      entries_seen: entriesSeen,
+      cwd: null,
+      transcript_error: null,
+      created: now,
+      updated: now,
+    });
+    return;
+  }
+  writeState(stateDir, sessionId, {
+    ...state,
+    entries_seen: entriesSeen,
+    transcript_error: null,
+    updated: now,
+  });
+}
+
+/**
+ * Records the session's working directory so a coordinator can map a
+ * session id to the worktree it owns instead of guessing between sessions.
+ */
+function noteCwd(stateDir, sessionId, cwd, now) {
+  if (!cwd) return;
+  const state = readState(stateDir, sessionId);
+  if (!state || state.cwd === cwd) return;
+  writeState(stateDir, sessionId, { ...state, cwd, updated: now });
+}
+
+/**
+ * Records that a Stop hook ran but could not read its transcript. Without
+ * this an unreadable transcript is indistinguishable from a session whose
+ * hooks never loaded at all.
+ */
+function noteTranscriptError(stateDir, sessionId, transcriptPath, cwd, now) {
+  const state = readState(stateDir, sessionId);
+  writeState(stateDir, sessionId, {
+    fence: state?.fence ?? null,
+    armed: state?.armed === true,
+    approved_hash: state?.approved_hash ?? null,
+    entries_seen: state?.entries_seen ?? 0,
+    cwd: cwd ?? state?.cwd ?? null,
+    transcript_error: transcriptPath || "unreadable",
+    created: state?.created ?? now,
+    updated: now,
+  });
 }
 
 /**
@@ -805,13 +897,17 @@ function assistantText(record) {
  * The Stop transition: scans transcript entries beyond the previously
  * processed marker and records the latest assistant fence in that tail as
  * pending. Entries already processed are never rescanned, so a consumed
- * fence cannot come back. With strict fences disabled this is a no-op.
- * Returns the recorded fence, or null.
+ * fence cannot come back. Returns the recorded fence, or null.
  */
-export function handleStop({ stateDir, sessionId, transcriptPath, strict = true, now = Date.now() }) {
-  if (!strict) return null;
+export function handleStop({ stateDir, sessionId, transcriptPath, now = Date.now(), cwd = null }) {
   const content = readTextFile(transcriptPath, process.cwd());
-  if (content === null) return null;
+  // An unreadable transcript is not "no fence presented". Record the
+  // failure so an absent state file means the hook never ran, rather than
+  // silently meaning the hook ran and could not see the transcript.
+  if (content === null) {
+    noteTranscriptError(stateDir, sessionId, String(transcriptPath ?? ""), cwd, now);
+    return null;
+  }
   const lines = content.split("\n");
   const total = lines[lines.length - 1] === "" ? lines.length - 1 : lines.length;
   const previous = readState(stateDir, sessionId);
@@ -831,9 +927,11 @@ export function handleStop({ stateDir, sessionId, transcriptPath, strict = true,
   }
   if (fence) {
     recordFence(stateDir, sessionId, fence, total, now);
+    noteCwd(stateDir, sessionId, cwd, now);
     return fence;
   }
   markEntriesSeen(stateDir, sessionId, total, now);
+  noteCwd(stateDir, sessionId, cwd, now);
   return null;
 }
 
@@ -841,9 +939,14 @@ export function handleStop({ stateDir, sessionId, transcriptPath, strict = true,
  * The UserPromptSubmit transition: arms the pending fence when the prompt
  * carries the approval word. Any other prompt changes nothing.
  */
-export function handleUserPromptSubmit({ stateDir, sessionId, prompt, strict = true, now = Date.now() }) {
+export function handleUserPromptSubmit({ stateDir, sessionId, prompt, now = Date.now() }) {
   if (!isApprovalText(prompt)) return null;
-  return armState(stateDir, sessionId, now, { strict });
+  // An approval may carry the approved text in a protocol fence. That text
+  // is what makes an early approval safe to defer: it binds the approval to
+  // one exact message instead of to whatever is recorded next.
+  const carried = latestFence(prompt);
+  const approvedHash = carried ? hashDraft(carried.content) : null;
+  return armState(stateDir, sessionId, now, { approvedHash });
 }
 
 function enforceInner({ stateDir, sessionId, command, cwd, branch, now }) {
@@ -856,9 +959,11 @@ function enforceInner({ stateDir, sessionId, command, cwd, branch, now }) {
   if (!state || state.armed !== true) {
     return { allow: false, reason: REASON_NOT_ARMED };
   }
+  // There is no armed-without-a-fence path. An approval always refers to
+  // text the user read, so a missing fence means there is nothing to check
+  // the payload against and the command is refused.
   if (!state.fence) {
-    consumeState(stateDir, sessionId, now);
-    return { allow: true, reason: null };
+    return { allow: false, reason: REASON_NOT_ARMED };
   }
   if (commit) {
     const payload = commitPayload(command, { cwd });
@@ -881,9 +986,9 @@ function enforceInner({ stateDir, sessionId, command, cwd, branch, now }) {
  * The PreToolUse transition for a Bash command. Main is checked before
  * arming and blocks outright. The arm is consumed only on success, so a
  * blocked attempt (wrong payload, unreadable file) can be retried with
- * the fence text without a fresh approval. An armed state with no fence on
- * record (the non-strict fallback) allows the command without a payload
- * check. Internal failures block the gated command.
+ * the fence text without a fresh approval. Every allowed command has its
+ * payload checked against a recorded fence; there is no path that skips
+ * that check. Internal failures block the gated command.
  */
 export function enforce({ stateDir, sessionId, command, cwd, branch = currentBranch, now = Date.now() }) {
   try {

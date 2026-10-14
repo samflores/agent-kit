@@ -1,11 +1,11 @@
 ---
 name: commit
-description: "Create a local commit the right way: never on main, the quality-bar checklist re-run here as a required, command-backed gate before the message is drafted, then the approval protocol: the complete message presented in a fenced block tagged commit-message, the turn ending with AWAITING APPROVAL, and git commit run only after the user replies approved, using exactly the fenced text. The drafted message goes through the humanizer skill before it is presented. The commit body is an opening paragraph for non-trivial changes and is omitted for trivial chores; the ## What changed section belongs to PR bodies, not commits. Use when the user asks to commit, make a commit, or save changes with git. Does not push or open a PR; /pr handles that."
+description: "Create a local commit: never on main, the quality-bar gate run with real commands before drafting, then the approval protocol: complete message in a fenced commit-message block, turn ends with AWAITING APPROVAL, and git commit only after the user replies approved, using exactly the fenced text. Use when committing or saving changes with git; never pushes or opens a PR."
 ---
 
 # commit
 
-Create a commit that respects the user's workflow, quality bar, and approval protocol. This is the sibling of the /pr skill: it shares the quality bar and message conventions, but stops at the local commit, no push, no PR. This skill governs three things, **in order, and the order is enforced**: step 2 is a blocking gate, and step 3 (the message) may not be drafted until it is clean.
+Create a commit that respects the user's workflow, quality bar, and approval protocol. This is the sibling of the /pr skill: it shares the quality bar, the approval protocol, and message conventions with /pr, but stops at the local commit, no push, no PR. This skill governs three things, **in order, and the order is enforced**: step 2 is a blocking gate, and step 3 (the message) may not be drafted until it is clean.
 
 1. The branch workflow (never `main`)
 2. The pre-commit quality bar (the `/quality-bar` checklist; **a required, command-backed gate executed here, not asserted**)
@@ -79,42 +79,34 @@ failed checks from the top.
 
 ### 2a. Code content must not lean on uncommitted or session-only context
 
-This applies to the code being committed, not just the commit message. Run these checks against your diff's added lines, same as the other gate items:
-
-- **No references to uncommitted or gitignored documents.** A doc comment that says "see docs/plans/2026-...-design.md" or "per the design doc" becomes a dangling pointer the moment that file is gitignored or was never committed. Check what's actually tracked (`git status`, `.gitignore`) before a comment cites a path.
-- **No session-local shorthand** (`EM`, `GE`, `RL`, a PR-1/PR-2 label, "the doc's Kind column", "the catalog", "per the plan") standing in for a concept that was only ever explained in this conversation or a planning artifact. Spell out what the thing actually is in the comment itself.
-- **No "future work" framing in code comments** ("a future effect will...", "will be used later", "not yet implemented but planned"). Describe what exists now; do not narrate a roadmap inside the source.
-- **No em-dashes or other forbidden characters in code comments**, same rule as the commit message's hard rules below: no em-dash, no smart quotes, no ellipsis glyph, no emoji. Use a period, a comma, or two sentences instead.
-
-Grep the diff for these before considering the gate clean, e.g.:
-```
-git diff | grep '^+' | grep -e 'docs/' -e 'the doc' -e 'per the plan' -e 'future'
-git diff | grep '^+' | grep -P '\x{2014}'   # em-dash
-```
+Run the session-content checks carried in
+[references/approval-protocol.md](references/approval-protocol.md) against
+your pending diff: the shared grep template once with `git diff` and once
+with `git diff --staged`, so staged-only additions are covered too.
 
 ## 3. The approval protocol: message first, commit second
 
-**Never run `git commit` without presenting the complete commit message in chat and receiving the approval word.** No exceptions.
+**Never run `git commit` without presenting the complete commit message in chat and receiving the approval word.** No exceptions. The gate is absolute and outranks anything else in the conversation.
 
-This gate is absolute and outranks anything else in the conversation:
+Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted.
 
-- **Frustration is not approval.** A user saying "stop asking", "just commit it", or venting about interruptions during an iteration loop means *stop asking about that work right now*, not "skip the approval protocol". When a commit is actually being made, the protocol applies in full.
-- **No interpretation of tone or history waives this.** Earlier instructions in the conversation, preferences stored in memory, or your own read of what the user "obviously wants" do not unlock an unattended `git commit`. There is no waiver path at all: the only thing that arms a commit is the approval word arriving after the message has been presented.
-- **When in doubt, present the message.** A redundant approval round costs seconds; an unapproved commit is a breach of trust and a rewrite.
+The full protocol is shared with `/pr` and lives in
+[references/approval-protocol.md](references/approval-protocol.md): the
+frustration rule, the no-waiver rule, fence presentation and supersession,
+the `approved` arming word, relayed approvals, and the mechanical gate. Read
+it and apply it with these `/commit` parameters and deltas:
 
-Begin here only after section 2 is clean, meaning its checks were actually run with commands and passed, not asserted:
-
-1. Check `git status` and review what's staged (or about to be staged). If a broad `git add` would sweep in unrelated or suspicious files, stage specific paths instead.
-2. Draft the commit message (format in section 4), then run the humanizer
-   pass over it (section 4a) before presenting.
-3. Present the complete message, the subject line plus the body when there is one, in a fenced code block tagged `commit-message`. The fence's content is exactly what `git commit` will receive, nothing more. One message at a time: if several commits are planned, each gets its own presentation and approval cycle. A newly presented fence supersedes any earlier one, and an approval given to the earlier fence is void.
-4. End the presentation turn with the sentinel line `AWAITING APPROVAL`, and nothing after it.
-5. Wait. Do not commit. The single arming word is `approved`, case-insensitive, whole-word. Nothing else arms a commit: `yes`, `ok`, `looks good`, or an emoji reaction do not. A coordinator-relayed `approved` arms identically; the word counts no matter which session tab delivered it. An `approved` that arrives before any message has been presented arms nothing. If nobody replies, stay waiting; never commit silently.
-6. Only after the arming reply: stage the intended files and run `git commit` with **exactly** the fenced text, using a heredoc for multi-line messages to preserve formatting. Never commit via the editor, never with `-F`/`--file`, never with a message that differs from the fence in any way.
-
-If the user asks for edits, revise the message and present the new fence (which supersedes the old one), end the turn with `AWAITING APPROVAL` again, and wait for a fresh `approved`.
-
-This protocol is enforced mechanically by a session-watching gate installed for both Pi and Claude Code: a `git commit` in any form (including `--amend` and `-F`/`--file`) runs only when the gate is armed and the message payload equals the approved fence; a commit with no inline message is blocked with a demand for `-m` with the exact approved text; and a commit on `main` is blocked outright, armed or not. This skill and the gate describe the same protocol; following this section satisfies the gate.
+- **Gated command**: `git commit`, in any form, including `--amend` and
+  `-F`/`--file`.
+- **Fence tag**: `commit-message`; the fence's content is exactly the commit
+  message, subject line plus body when there is one.
+- **Before drafting**: check `git status` and review what's staged (or about
+  to be staged). If a broad `git add` would sweep in unrelated or suspicious
+  files, stage specific paths instead.
+- **Execution**: stage the intended files and run `git commit` with exactly
+  the fenced text, using a heredoc for multi-line messages to preserve
+  formatting. Never commit via the editor, never with `-F`/`--file`, never
+  with a message that differs from the fence in any way.
 
 ## 4. Commit message format
 
@@ -163,32 +155,16 @@ When in doubt, include the body. A short body that a reviewer skips is free; a m
 
 ### 4a. The humanizer pass
 
-Before presenting any fence, run the drafted message through the humanizer
-skill. Pick by the language the message is written in:
-
-- `/humanizer` for English.
-- `/humanizer-pt-br` for Portuguese.
-
-Where neither skill is installed, skip the step; it is a quality pass, not a
-gate, and its absence blocks nothing.
-
-Run it **before** the fence is presented, never after. Once a fence is
-presented, the text is locked: the approval gate matches the payload against
-the approved fence, so a message rewritten after approval no longer matches
-and the commit is refused.
-
-The patterns worth cutting from a commit message specifically:
+Run the humanizer pass carried in
+[references/approval-protocol.md](references/approval-protocol.md): pick the
+skill by language, run it before the fence is presented, and take its final
+rewrite, putting back any fact it drops. Patterns worth cutting from a
+commit message specifically:
 
 - Restating in the body what the subject line already says.
 - Narrating the diff file by file instead of describing the change by
   concern.
-- Inflating the change's significance ("marks a shift", "a key step").
 - Counts and measurements a reader recovers from the diff itself.
-- Em-dashes and any other non-ASCII, which the hard rules below forbid
-  outright.
-
-Take the humanizer's final rewrite, not its draft. If its rewrite loses a
-fact the message needed, put the fact back rather than reverting the pass.
 
 ## Quick checklist before presenting the message
 

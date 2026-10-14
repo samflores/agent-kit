@@ -1,6 +1,6 @@
 ---
 name: quality-bar
-description: "The project-aware quality bar for code you write. Invoke BEFORE implementing a plan or feature (and re-check before committing) to detect the project's formatter/linter/CI/hook conventions, then apply cleanup scoped to your changes only. Never impose strictness the project doesn't have, never sweep untouched code, never introduce new warnings. Covers formatting, linting, warning baseline, tests, project-aware comment style (defaulting to no inline comments), and language-specific import/reference conventions for Rust (use over any fully qualified path; FQN for disambiguation only, free functions via imported modules), Ruby (constant scoping, autoload/require), and JavaScript/TypeScript (named imports, module boundaries, type strictness). The /pr skill re-runs this as a confirmation pass."
+description: "The project-aware quality bar for code you write. Invoke before implementing a plan or feature and again before committing: detect the project's formatter, linter, CI, and hook conventions, match them, and scope cleanup to your changes. Never impose strictness the project lacks, never sweep untouched code, never introduce new warnings."
 ---
 
 # quality-bar

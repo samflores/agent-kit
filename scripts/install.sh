@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Install agent-kit skills by symlink into ~/.agents/skills.
 #
-# Symlinks every directory under skills/ in this repo. Never copies: the repo
-# is the single source of truth and each installed skill points back at a
-# commit. Idempotent: re-running reports already-installed skills and changes
+# Symlinks every directory under skills/ in this repo, except the
+# underscore-prefixed ones, which hold files shared across skills rather
+# than a skill. Never copies: the repo is the single source of truth and
+# each installed skill points back at a commit. Idempotent: re-running reports already-installed skills and changes
 # nothing. Refuses to touch any existing entry that is not a symlink into
 # this repo, and exits nonzero when anything was refused. Removes nothing:
 # retiring superseded skills is a separate, explicit step.
@@ -33,6 +34,9 @@ refused=0
 for dir in "${skill_dirs[@]}"; do
   name=${dir%/}
   name=${name##*/}
+  case $name in
+    _*) continue ;;  # shared reference files, not a skill
+  esac
   src="$skills_src/$name"
   dst="$skills_dst/$name"
 

@@ -83,12 +83,10 @@ approval word
 and lets exactly one gated `git commit` or `gh pr create` through per
 approval, matching the payload against the fenced text.
 
-Register it per project, never machine-wide: the gate also refuses
-`git commit` on `main` outright, and a user-scope registration imposes that
-on every unrelated session. Project scope is `.claude/settings.json` in the
-repo root, gitignored, which means the worktrees need it copied in
-(worktree creation, below). The gate's own README documents the hook
-registration JSON; read it rather than reconstructing the wiring.
+Register it at user scope in the Claude config it serves, because the
+approval policy applies machine-wide, not per project. The gate's own
+README carries the install and the registration; read it rather than
+reconstructing the wiring.
 
 Its absence is not a blocker. An unregistered gate costs enforcement, not
 correctness: the protocol still reads the same to the agents.
@@ -171,10 +169,10 @@ Worktrees live under `.worktrees/` and are gitignored (add the entry if the
 repo lacks it). The tracker never references worktree paths.
 
 **The worktree needs the repo's local-only files.** A fresh worktree
-carries tracked content only, and two things a wave depends on are
-gitignored by design: the tracker itself (the agents read their ticket from
-their own worktree) and the approval gate's `.claude/settings.json`. Both
-are absent unless copied.
+carries tracked content only, and the tracker a wave depends on is
+gitignored by design: the agents read their ticket from their own
+worktree, so it is absent unless copied. The approval gate is registered
+at user scope and needs no per-worktree copy.
 
 The `/worktree-setup` skill configures this once per repo. Run it before
 the first wave; a wave spawned into worktrees missing those files fails

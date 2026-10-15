@@ -1,6 +1,6 @@
 ---
 name: worktree-setup
-description: "Configure a repo so fresh git worktrees carry the local-only files work depends on: the gitignored paths a clone never sees (trackers, approval gate settings, env files). Covers worktrunk (wt) configuration with .worktreeinclude and a copy-ignored pre-start hook, the user-level copy hook gap that silently skips ignored files, and the manual fallback where wt is absent. Run once per repo, before any worktree-based workflow depends on those files being present."
+description: "Configure a repo so fresh git worktrees carry the local-only files work depends on: the gitignored paths a clone never sees (trackers, local tool settings, env files). Covers worktrunk (wt) configuration with .worktreeinclude and a copy-ignored pre-start hook, the user-level copy hook gap that silently skips ignored files, and the manual fallback where wt is absent. Run once per repo, before any worktree-based workflow depends on those files being present."
 ---
 
 # worktree-setup
@@ -19,9 +19,8 @@ recurring ones:
 
 - **A local tracker or ticket directory**, when agents read their own ticket
   from their own worktree.
-- **Tool settings that are gitignored by design**, such as an approval gate's
-  `.claude/settings.json`, which is deliberately not committed because it is
-  machine-local and project-scoped.
+- **Tool settings that are gitignored by design**, such as local agent or
+  hook settings, deliberately not committed because they are machine-local.
 - **Environment files** the app or test suite reads.
 
 A path that is tracked needs nothing here. The list is only ever the

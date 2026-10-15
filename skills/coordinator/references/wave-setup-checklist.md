@@ -14,21 +14,20 @@ resolves inside the repo and makes `repo/repo/.worktrees/...`.
 
 ## 2. The local-only files
 
-A fresh worktree carries tracked content only. Copy these in:
+A fresh worktree carries tracked content only. Copy the tracker in:
 
 ```bash
-cp -r "$REPO/.claude" "$WT/"          # the approval gate
 mkdir -p "$WT/.scratch"
 cp -r .scratch/<effort> "$WT/.scratch/"
 ```
 
-Exclude them per worktree. The `.gitignore` of the main checkout does NOT
+Exclude it per worktree. The `.gitignore` of the main checkout does NOT
 reach a worktree, because each worktree has its own copy of that tracked
 file. Use the exclude file instead:
 
 ```bash
 gd=$(git -C "$WT" rev-parse --git-path info/exclude)
-for e in ".scratch/" ".claude/settings.json" ".worktrees/"; do
+for e in ".scratch/" ".worktrees/"; do
   grep -qxF "$e" "$gd" || printf '%s\n' "$e" >> "$gd"
 done
 ```
@@ -51,9 +50,10 @@ Verify from inside the worktree: `mise ls --current` exits 0.
 
 ## 4. Trust the directory for the hooks
 
-Claude Code loads hooks from a project `.claude/settings.json` only in a
-directory the user has trusted. A fresh worktree is a new directory, so it
-is untrusted and its hooks never load. The symptom is NO state file at all
+A fresh worktree is a new directory to Claude Code, and an untrusted
+directory is one of the ways hooks silently never load, wherever they are
+registered. Trust the worktree directory once. The symptom of hooks that
+did not load is NO state file at all
 under `~/.cache/agent-kit/approval-gate/` for that session.
 
 That symptom is now specific. A hook that runs always writes state, even

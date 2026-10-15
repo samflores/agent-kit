@@ -62,11 +62,15 @@ refused as unverifiable.
 
 ## Claude Code registration
 
-Hooks have no auto-discovered directory, so the entry point stays in
-this repo and is registered by absolute path in the user-scope
-`~/.claude/settings.json` (user scope because the approval policy
-applies machine-wide, not per project). The registration is a one-time
-settings edit; the script is never copied.
+Hooks have no auto-discovered directory, so the engine is installed into
+the Claude config it serves and registered there. Copy `core.mjs` and
+`lib.mjs` into `<config-dir>/hooks/approval-gate/`, where `<config-dir>`
+is `$CLAUDE_CONFIG_DIR` with `~/.claude` as the default, then register
+the installed path by absolute path in that config's user-scope
+`settings.json` (user scope because the approval policy applies
+machine-wide, not per project). An engine update means copying the two
+files over the installed ones; the registration keeps pointing at the
+installed path.
 
 ```json
 {
@@ -74,14 +78,14 @@ settings edit; the script is never copied.
     "Stop": [
       {
         "hooks": [
-          { "type": "command", "command": "node /home/samflores/Code/agent-kit/extensions/approval-gate/core.mjs stop" }
+          { "type": "command", "command": "node <config-dir>/hooks/approval-gate/core.mjs stop" }
         ]
       }
     ],
     "UserPromptSubmit": [
       {
         "hooks": [
-          { "type": "command", "command": "node /home/samflores/Code/agent-kit/extensions/approval-gate/core.mjs userpromptsubmit" }
+          { "type": "command", "command": "node <config-dir>/hooks/approval-gate/core.mjs userpromptsubmit" }
         ]
       }
     ],
@@ -89,7 +93,7 @@ settings edit; the script is never copied.
       {
         "matcher": "Bash",
         "hooks": [
-          { "type": "command", "command": "node /home/samflores/Code/agent-kit/extensions/approval-gate/core.mjs pretooluse" }
+          { "type": "command", "command": "node <config-dir>/hooks/approval-gate/core.mjs pretooluse" }
         ]
       }
     ]

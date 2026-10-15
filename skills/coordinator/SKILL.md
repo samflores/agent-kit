@@ -57,10 +57,12 @@ kind at invocation; `herdr agent start --kind` lists what herdr supports,
 and `claude` is the other kind this skill documents. The kind is recorded
 in the wave state at spawn, because it decides two things and nothing else:
 
-- **How the agents start.** A kind needing environment (Claude Code reading
-  a non-default config directory) gets it exported into the pane before
-  `agent start`, since `--kind` takes no environment and `-- <AGENT_ARG>...`
-  passes arguments only.
+- **How the agents start.** The pane inherits the session's environment,
+  so the agent starts with whatever tool configuration the session was
+  started with. Export nothing per pane: `--kind` takes no environment
+  and `-- <AGENT_ARG>...` passes arguments only, and a per-pane override
+  of a tool config desyncs the agent from the session's own
+  registration.
 - **How the coordinator is woken.** The relay loop's wake mechanism belongs
   to the coordinator's own runtime, not the tab agents': a Pi coordinator
   uses the watcher extension, a Claude Code coordinator uses `Monitor`. The
@@ -73,10 +75,11 @@ may not mix kinds; one wave, one kind.
 ## The approval gate
 
 The fence protocol is prompt-level discipline until something enforces it.
-The `approval-gate` engine
-(`~/Code/agent-kit/extensions/approval-gate/core.mjs`) is that enforcement,
-and it is Claude Code hooks (`Stop`, `UserPromptSubmit`, `PreToolUse`),
-so it binds Claude agents only. Registered, it arms on the approval word
+The `approval-gate` engine is that enforcement, installed into the Claude
+config directory it serves (the gate's own README carries the install and
+registration), and it is Claude Code hooks (`Stop`, `UserPromptSubmit`,
+`PreToolUse`), so it binds Claude agents only. Registered, it arms on the
+approval word
 and lets exactly one gated `git commit` or `gh pr create` through per
 approval, matching the payload against the fenced text.
 
@@ -136,10 +139,9 @@ herdr agent start impl-<slug> --kind "$KIND" --pane "$ROOT_PANE"
 herdr agent start rev-<slug> --kind "$KIND" --pane "$REVIEW_PANE"
 ```
 
-A kind needing environment gets it into the pane before `agent start`,
-which detects whatever the pane's shell then launches. Claude Code reading
-a non-default config directory, for instance, needs its config variable
-exported in both panes first.
+The panes inherit the coordinator session's environment, so there is no
+export step: `agent start` detects whatever the pane's shell then
+launches, already pointed at the session's own tool configuration.
 
 Then:
 
@@ -428,15 +430,15 @@ merged ticket, in this order:
    git -C "$REPO" pull --ff-only origin main
    ```
 
-   Then gate the merged tip before any teardown step: run the full
-   golem-gates set (fmt, `clippy --workspace --all-targets -- -D
-   warnings`, `test --workspace` under `RUSTUP_TOOLCHAIN=1.96.1`) in the
-   main checkout. Branch fences and PR CI gate branches against their
-   own bases; a merge can combine two green branches into a red tip and
-   nobody else builds that combination. Red gates stop the teardown:
-   report the failure to the user and get a repair moving before closing
-   anything. This rule exists because SAM-38 + SAM-39 merged green
-   branches into a red main that sat for three hours.
+   Then gate the merged tip before any teardown step: run the project's
+   own full gate set, every fmt, lint, typecheck, and test command its
+   CI, hooks, or docs define, under any toolchain pin the project keeps,
+   in the main checkout. Branch fences and PR CI gate branches against
+   their own bases; a merge can combine two green branches into a red
+   tip and nobody else builds that combination. Red gates stop the
+   teardown: report the failure to the user and get a repair moving
+   before closing anything. This rule exists because two green branches
+   once merged into a red main that sat for three hours.
 
 3. Close the tab, remove the worktree, delete the branches, delete the
    review file:
@@ -515,8 +517,9 @@ Agent scope ends at declared resources: the agent's worktree plus paths
 named in its prompt. Any write outside them is a coordinator defect even
 when the agent volunteers it. Two real failures, both October 2026:
 
-1. An implementer edited five machine-local files under ~/.config/golem/
-   (user config packs and coordinator-built hand-test fixtures) because
+1. An implementer edited five machine-local files under the owner's
+   user config directory (config packs and coordinator-built hand-test
+   fixtures) because
    its prompt said "every rules pack parses unchanged" and the packs were
    not in the repo. It hunted the home directory, edited, and reported
    the writes as a completed fact. The correct move: BLOCKED: with the
@@ -538,7 +541,7 @@ carry two scopes (a short reply answering several questions, a "one
 ticket" that can mean merge-these or cover-everything), the coordinator
 restates it as a concrete scope statement (modules in, modules out,
 ticket count) and waits for a yes before cutting or publishing tickets.
-SAM-44, October 2026: the owner's "one ticket. watch list out. no"
+October 2026: the owner's "one ticket. watch list out. no"
 answered a three-part question; the coordinator read merge-the-three
 and exclude-the-watch-list, published the narrow ticket, and the wave
 faithfully built the wrong scope. Never infer scope from which reading

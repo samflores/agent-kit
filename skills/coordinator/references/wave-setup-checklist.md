@@ -74,7 +74,7 @@ A file with today's timestamp means the hooks loaded. No such file AFTER a
 settled turn means they did not, and the wave has no gate.
 
 Do not restart an agent on a mid-turn check. That mistake cost a session's
-context in the ENG-7450 wave: the file appeared one minute later, and the
+context in a real wave: the file appeared one minute later, and the
 gate had been working the whole time. The Monitor already waits for a
 settled turn; trust it instead of checking by hand.
 
@@ -82,17 +82,22 @@ Verify the hook itself runs from the worktree:
 
 ```bash
 cd "$WT" && echo '{"session_id":"smoke","transcript_path":"/nonexistent"}' \
-  | node ~/Code/agent-kit/extensions/approval-gate/core.mjs stop
+  | node "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/approval-gate/core.mjs" stop
 ```
 
 Exit 0 means the script works. It does NOT prove the session loaded it.
 
 ## 5. The environment of the pane
 
-`herdr agent start` takes no environment. Export first, then start:
+`herdr agent start` takes no environment, and the pane inherits the
+session's own: the agent starts with whatever tool configuration the
+session was started with. Export nothing, and never set
+`CLAUDE_CONFIG_DIR` (or any tool config) per pane: the override
+desyncs the agent from the session's own registration. A non-default
+config is a session-level decision, made before the coordinator
+session starts, never a per-pane export.
 
 ```bash
-herdr pane run "$PANE" "export CLAUDE_CONFIG_DIR=/home/samflores/.config/claude-stack"
 herdr agent start "<name>" --kind claude --pane "$PANE"
 ```
 

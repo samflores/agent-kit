@@ -39,8 +39,9 @@ with its fence text included verbatim):
    in the body: measurements taken along the way, before/after timings,
    investigation narrative, and, in a pr-message fence only, hard-wrapped
    body lines (the /pr skill bans any break inside a paragraph or list
-   item; commit-message bodies follow the /commit skill's own
-   conventions). Also flag actorless summary sentences
+   item; commit-message bodies keep the opposite convention and wrap
+   hard at about 72 characters, so a commit body with long unbroken
+   lines is also a finding). Also flag actorless summary sentences
    ("Judging one act runs one pass..."), performance or cost
    characterizations ("an act costs the slowest pass instead of the
    sum"), and advisories to the reader ("provider rate limits apply to

@@ -130,7 +130,7 @@ A **short opening paragraph** (1-3 sentences) of direct sentences that state wha
 - **No reader advisories** ("provider rate limits apply to the burst").
 - **No type or struct tour.** The body does not describe what each struct, enum, or field does ("the judge tag owns the polarity, the harness tag owns the check spec"); that is the code's job. State the behavior change in simple, direct sentences and stop.
 
-Plain prose, no heading. That is the entire body.
+Plain prose, no heading. **Wrap the message hard at about 72 columns**: the subject stays a single line, and every body line breaks near 72 characters. The wrap is part of the message: the fence preserves it, a relayed approval carries it verbatim, and `git commit` commits it unchanged. (The `/pr` skill inverts this for its own fences: a pr-message body never hard-wraps.)
 
 
 Do **not** include a `## What changed` section in commit messages. That section belongs to PR bodies, not commits. The commit diff is the change list; the commit body carries only the context a reviewer needs to make sense of the subject line.
@@ -177,7 +177,7 @@ commit message specifically:
 - [ ] Body: opening paragraph only for non-trivial changes; omitted for trivial changes or simple chores. No `## What changed` section in commit messages. Every sentence names a concrete actor performing a concrete action: no subject restatement, no lead-in-then-colon, no past-tense problem story, no session history, no cost characterizations, no reader advisories.
 - [ ] Humanizer pass run over the drafted message (`/humanizer`, or `/humanizer-pt-br` for Portuguese) before presenting, and its final rewrite taken.
 - [ ] Message is ASCII-only, no AI attribution, no verification claims, no future-work mentions, no file-by-file enumeration, no headings of any kind.
-- [ ] Complete message presented in one fenced block tagged `commit-message`; the turn ends with `AWAITING APPROVAL` and nothing after it.
+- [ ] Complete message presented in one fenced block tagged `commit-message`; body lines hard-wrapped at about 72 characters; the turn ends with `AWAITING APPROVAL` and nothing after it.
 - [ ] `git commit` only after a later reply contains the word `approved`, using exactly the fenced text. Never on `main`, never silently.
 
 After approval: stage the intended files and commit with exactly the fenced text (heredoc for multi-line). Do not push; pushing and opening the PR are the `/pr` skill's job.

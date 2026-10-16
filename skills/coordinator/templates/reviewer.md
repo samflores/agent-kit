@@ -46,7 +46,38 @@ with its fence text included verbatim):
    characterizations ("an act costs the slowest pass instead of the
    sum"), and advisories to the reader ("provider rate limits apply to
    the burst"): every body sentence must name a concrete actor performing
-   a concrete action. Each one is a finding.
+   a concrete action. Each one is a finding. Before that item scan,
+   compress every body paragraph to one sentence. Sentences that drop
+   without information loss are openers or filler, and each is a
+   finding. Session narration is the same class. "The sweep applied
+   the shape test and removed sixteen comments." narrates the
+   producing process; "Sixteen topic-fragment comments are gone."
+   states the outcome, and only the outcome form is acceptable. Also
+   reject a sentence that answers nothing about the change, like "The
+   twenty-eight tests pin their code in the new layout", and an
+   abstract concern used as a subject that only "carries" or "owns"
+   type names without stating a behavior. In the diff's files, also
+   flag code-comment violations against the repo's writing style rules.
+   The opener ban is about shape, not punctuation. A doc comment whose
+   first sentence names a topic and defers its substance to what
+   follows is the defect, with or without the colon. The pair "The
+   jump pill's surface: black text on a bright background" and "The
+   jump pill's surface is black text on a bright background. The hint
+   reads over the border row." fails identically, so replacing the
+   colon with a period is not a fix. A first sentence that restates
+   the item's name ("Resolves a review with retry." on fn retry) is
+   that same defect even when the doc continues with substance. The
+   sentence drops with no information loss, so the fix drops it or
+   folds it, and the contract sentence leads. Also flag a doc comment that narrates the
+   next statement's mechanics (an inline comment disguised as a doc
+   comment), a doc comment on an item whose name alone suffices, and
+   any module in the diff carrying a second responsibility under the
+   repo's NFR rules (the line count is the symptom; extraction by
+   responsibility is the fix). Verify code-comment sweep claims with
+   a full inventory in the report. The inventory lists every doc
+   comment in the touched files with its first sentence and its
+   verdict, so the claim is checkable line by line. A counted
+   assertion without the inventory is not verification.
 3. Change nothing. You review: never edit files, commit, push, or open
    PRs. The commit-message and pr-message fence protocol never applies
    to you.

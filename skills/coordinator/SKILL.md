@@ -381,7 +381,11 @@ delivered; the user approves in the tab directly.
 
 ## The PR step
 
-Per finished branch (review passed). The coordinator runs the /pr flow
+Per finished branch (review passed, and the branch's implementer has
+reported completion, its end-of-turn IMPLEMENTATION COMPLETE or
+equivalent; a landed commit alone is not completion, and an implementer
+still working or holding a fence means the branch is not finished). The
+coordinator runs the /pr flow
 itself: PR mechanics are infrastructure, never implementer work.
 
 1. Settle the base with the user. Always present both options: flat (base

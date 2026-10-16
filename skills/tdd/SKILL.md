@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Drive a code change with the strict TDD cycle: RED, GREEN, REFACTOR. Use when the user asks for TDD, says "write a failing test first", or asks to add a feature/fix a bug "with tests". Also use proactively when starting any non-trivial code change in a project that already has a test suite.
+description: Drive a code change with the strict TDD cycle (RED, GREEN, REFACTOR). Use when the user asks for TDD, says "write a failing test first", or asks to add a feature/fix a bug "with tests". Also use proactively when starting any non-trivial code change in a project that already has a test suite.
 user_invocable: true
 ---
 
